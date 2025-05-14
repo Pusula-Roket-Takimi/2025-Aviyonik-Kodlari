@@ -9,10 +9,8 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
 #include "lsm6dsm.h"
-
 TaskHandle_t Task1;
 TaskHandle_t Task2;
-
 // LED pins
 
 
@@ -56,8 +54,9 @@ LSM6DSM IMU;
 HardwareSerial LoraSerial(2);
 
 float irtifaBasinc;
-int a = 0;
-int c = 0;
+int irtifaKaybi = 0;
+int roketYatma = 0;
+int tetiklenmeSayisi=0;
 
 
 
@@ -132,13 +131,16 @@ void Kurtarma(void* pvParameters) {
     P1 = (1 - K1) * P1;
 
     float new_irtifa = bmp.readAltitude(X);
-    if (new_irtifa < irtifaBasinc && X1 > 75) {
-      c = 1;
+    if (new_irtifa < irtifaBasinc) {
+      irtifaKaybi=1;
     }
-
-    if (c == 1 && a == 0) {
+    if(X1>75)
+    {
+      roketYatma=1;
+    }
+    if (irtifaKaybi && roketYatma && tetiklenmeSayisi==0) {
       digitalWrite(buzzer, HIGH);
-      a = 1;
+      tetiklenmeSayisi = 1;
       p_durum = "+";
       delay(600);
 
