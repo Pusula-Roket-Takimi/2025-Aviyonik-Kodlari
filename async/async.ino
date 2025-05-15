@@ -35,7 +35,11 @@ float X1 = 0.0;    // İlk tahmin
 float K1 = 0.0;    // Kalman kazancı
 
 
-
+float Q2 = 0.001;  // Daha az sistem gürültüsü
+float R2 = 0.1;    // Ölçüme daha çok güven (daha düşük)
+float P2 = 1.0;    // Başlangıç belirsizliği
+float X2 = 0.0;    // İlk tahmin
+float K2 = 0.0;    // Kalman kazancı
 
 
 
@@ -117,7 +121,8 @@ void Kurtarma(void* pvParameters) {
 
   for (;;) {
     float basinc = bmp.readPressure();
-    float roketAci = abs(IMU.readFloatAccelZ()) * 100;
+    float roketAci_X = abs(IMU.readFloatAccelX()) * 100;
+    float roketAci_Y = abs(IMU.readFloatAccelY()) * 100;
     irtifaBasinc = bmp.readAltitude(X);
 
     P = P + Q;
@@ -127,14 +132,19 @@ void Kurtarma(void* pvParameters) {
 
     P1 = P1 + Q1;
     K1 = P1 / (P1 + R1);
-    X1 = X1 + K1 * (roketAci - X1);
+    X1 = X1 + K1 * (roketAci_X - X1);
     P1 = (1 - K1) * P1;
+
+    P2 = P2 + Q2;
+    K2 = P2 / (P2 + R2);
+    X2 = X2 + K1 * (roketAci_Y - X2);
+    P2 = (1 - K2) * P2;
 
     float new_irtifa = bmp.readAltitude(X);
     if (new_irtifa < irtifaBasinc) {
       irtifaKaybi=1;
     }
-    if(X1>75)
+    if(X1>75 || X2>75 )
     {
       roketYatma=1;
     }
