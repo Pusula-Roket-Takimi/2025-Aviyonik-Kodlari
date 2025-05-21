@@ -1,7 +1,3 @@
-//#define TESTMODU 1
-
-
-
 
 #include <HardwareSerial.h>
 #include <Arduino.h>
@@ -11,72 +7,53 @@
 #include "lsm6dsm.h"
 TaskHandle_t Task1;
 TaskHandle_t Task2;
-// LED pins
-
-
-
-
-
-
-
-
-
 // Kalman filtresi değişkenleri
-float Q = 0.001;  // Daha az sistem gürültüsü
-float R = 0.1;    // Ölçüme daha çok güven (daha düşük)
-float P = 1.0;    // Başlangıç belirsizliği
-float X = 0.0;    // İlk tahmin
-float K = 0.0;    // Kalman kazancı
-
-float Q1 = 0.001;  // Daha az sistem gürültüsü
-float R1 = 0.1;    // Ölçüme daha çok güven (daha düşük)
-float P1 = 1.0;    // Başlangıç belirsizliği
-float X1 = 0.0;    // İlk tahmin
-float K1 = 0.0;    // Kalman kazancı
-
-
-float Q2 = 0.001;  // Daha az sistem gürültüsü
-float R2 = 0.1;    // Ölçüme daha çok güven (daha düşük)
-float P2 = 1.0;    // Başlangıç belirsizliği
-float X2 = 0.0;    // İlk tahmin
-float K2 = 0.0;    // Kalman kazancı
-
-
-
-
-
+float Q_Basinc= 0.001;  // Daha az sistem gürültüsü
+float R_Basinc = 0.1;    // Ölçüme daha çok güven (daha düşük)
+float P_Basinc = 1.0;    // Başlangıç belirsizliği
+float Basinc_Kalman = 0.0;    // İlk tahmin
+float K_Basinc = 0.0;    // Kalman kazancı
+float Q_XEksen = 0.001;  // Daha az sistem gürültüsü
+float R_XEksen = 0.1;    // Ölçüme daha çok güven (daha düşük)
+float P_XEksen = 1.0;    // Başlangıç belirsizliği
+float XEksen_Kalman = 0.0;    // İlk tahmin
+float K_XEksen = 0.0;    // Kalman kazancı
+float Q_YEksen = 0.001;  // Daha az sistem gürültüsü
+float R_YEksen = 0.1;    // Ölçüme daha çok güven (daha düşük)
+float P_YEksen = 1.0;    // Başlangıç belirsizliği
+float YEksen_Kalman = 0.0;    // İlk tahmin
+float K_YEksen = 0.0;    // Kalman kazancı
+// Kalman filtresi değişkenleri
+//Önİşlemci Tanımlamaları
+#define GpsRX D8
+#define GpsTX D9
 #define buzzer D4
-String p_durum = "-";
-Adafruit_BMP280 bmp;
-LSM6DSM IMU;
-
-
-// Lora tanımlamaları
 #define LoraRX D0
 #define LoraTX D1
+//Önİşlemci Tanımlamaları
 
+// Class Tanımlaması
+Adafruit_BMP280 bmp;
+LSM6DSM IMU;
 HardwareSerial LoraSerial(2);
+TinyGPSPlus gps;
+HardwareSerial GpsSerial(1);
+// Class Tanımlaması
 
+//Değişken Tanımlamaları
+String p_durum = "-";
 float irtifaBasinc;
 int irtifaKaybi = 0;
 int roketYatma = 0;
 int tetiklenmeSayisi=0;
-
-
-
-// GPS tanımlamaları
-#define GpsRX D8
-#define GpsTX D9
-TinyGPSPlus gps;
-HardwareSerial GpsSerial(1);
-
-String enlem, boylam, irtifa;
-
+float basinc, roketAci_X, roketAci_Y, roketAci_Z ,gyroX,gyroY,gyroZ,new_irtifa;
+double enlem, boylam, altitude;
+//Değişken Tanımlamaları
 void setup() {
   #ifdef TESTMODU
   Serial.begin(115200);
   #endif
-Serial.begin(115200);
+  
   // LoRa başlatma
   LoraSerial.begin(9600, SERIAL_8N1, LoraRX, LoraTX);
   // GPS başlatma
@@ -87,8 +64,6 @@ Serial.begin(115200);
   digitalWrite(buzzer, HIGH);
   delay(2000);
   digitalWrite(buzzer, LOW);
-
-
   //create a task that will be executed in the Kurtarma() function, with priority 1 and executed on core 0
   xTaskCreatePinnedToCore(
     Kurtarma, /* Task function. */
@@ -117,33 +92,40 @@ void Kurtarma(void* pvParameters) {
   Serial.print("Kurtarma running on core ");
   Serial.println(xPortGetCoreID());
   #endif
-
-
   for (;;) {
-    float basinc = bmp.readPressure();
-    float roketAci_X = abs(IMU.readFloatAccelX()) * 100;
-    float roketAci_Y = abs(IMU.readFloatAccelY()) * 100;
-    irtifaBasinc = bmp.readAltitude(X);
+     basinc = bmp.readPressure();
+     roketAci_X = abs(IMU.readFloatAccelX()) * 100;
+     roketAci_Y = abs(IMU.readFloatAccelY()) * 100;
+     roketAci_Z = abs(IMU.readFloatAccelZ()) * 100;
+     gyroX= abs(IMU.readFloatGyroX()) * 100;
+     gyroY= abs(IMU.readFloatGyroY()) * 100;
+     gyroZ= abs(IMU.readFloatGyroZ()) * 100;
+    //Basınç Kalman
+    P_Basinc = P_Basinc + Q_Basinc;
+    K_Basinc= P_Basinc / (P_Basinc + R_Basinc);
+    Basinc_Kalman = Basinc_Kalman + K_Basinc * (basinc - Basinc_Kalman);
+    P_Basinc= (1 - K_Basinc) * P_Basinc;
+    //Basınç Kalman
+    irtifaBasinc = bmp.readAltitude(Basinc_Kalman);
+    //İvme_X Kalman
+    P_XEksen = P_XEksen + Q_XEksen;
+    K_XEksen = P_XEksen / (P_XEksen + R_XEksen);
+    XEksen_Kalman = XEksen_Kalman + K_XEksen * (roketAci_X - XEksen_Kalman);
+    P_XEksen = (1 - K_XEksen) * P_XEksen;
+    //İvme_X Kalman
 
-    P = P + Q;
-    K = P / (P + R);
-    X = X + K * (basinc - X);
-    P = (1 - K) * P;
+    //İvme_Y Kalman
+    P_YEksen= P_YEksen + Q_YEksen;
+    K_YEksen = P_YEksen / (P_YEksen + R_YEksen);
+    YEksen_Kalman = YEksen_Kalman + K_YEksen * (roketAci_Y - YEksen_Kalman);
+    P_YEksen = (1 - K_YEksen) * P_YEksen;
+    //İvme_Y Kalman
 
-    P1 = P1 + Q1;
-    K1 = P1 / (P1 + R1);
-    X1 = X1 + K1 * (roketAci_X - X1);
-    P1 = (1 - K1) * P1;
-
-    P2 = P2 + Q2;
-    K2 = P2 / (P2 + R2);
-    X2 = X2 + K2 * (roketAci_Y - X2);
-    P2 = (1 - K2) * P2;
-    float new_irtifa = bmp.readAltitude(X);
+    new_irtifa = bmp.readAltitude(Basinc_Kalman);
     if (new_irtifa < irtifaBasinc) {
       irtifaKaybi=1;
     }
-    if(X1 <55 || X2 >75  )
+    if(XEksen_Kalman <55 || YEksen_Kalman >75  )
     {
       roketYatma=1;
     }
@@ -167,7 +149,7 @@ void Kurtarma(void* pvParameters) {
 
 
 void Haberlesme(void* pvParameters) {
-      #ifdef TESTMODU
+    #ifdef TESTMODU
   Serial.print("Haberlesme running on core ");
   Serial.println(xPortGetCoreID());
     #endif
@@ -177,40 +159,97 @@ void Haberlesme(void* pvParameters) {
     if (GpsSerial.available()) {
       if (gps.encode(GpsSerial.read())) {
         if (gps.location.isValid() && gps.altitude.isValid()) {
-          enlem = String(gps.location.lat(), 6);
-          boylam = String(gps.location.lng(), 6);
+          enlem = gps.location.lat(),6;
+          boylam =gps.location.lng(),6;
 
 
-          double altitude = gps.altitude.meters();
+           altitude = gps.altitude.meters();
 
-          irtifa = String(altitude);
+         
         }
       }
     } else {
-      enlem = "0.000000";
-      boylam = "0.000000";
-      irtifa = "00.00";
+      enlem = 0.000000;
+      boylam = 0.000000;
+      altitude = 00.0;
     }
-
-    //Açı verileri alınıyor
-    String x = String((IMU.readFloatAccelX()) * 100);
-    String y = String((IMU.readFloatAccelY()) * 100);
-    String z = String((IMU.readFloatAccelZ()) * 100);
-
-    // Veri paketi:
-    String VeriPaketi = "Aviyonik," + enlem + "," + boylam + "," + X + "," + x + "," + y + "," + X1 + "," + irtifa + "," + p_durum;
-      #ifdef TESTMODU
-  Serial.print("Veri paket aktif: ");
-  Serial.println(VeriPaketi);
-    #endif
-
     // LoRa'ya paket gönderimi
     LoraSerial.write((byte)0x00);
     LoraSerial.write(0x15);
     LoraSerial.write(0x12);
-    LoraSerial.println(VeriPaketi);
-    delay(700);
+  
+   LoraSerial.print("#BOD");
+   LoraSerial.print("Boylam=");
+   LoraSerial.print(boylam);
+   LoraSerial.print(",");
+
+   LoraSerial.print("Enlem=");
+   LoraSerial.print(enlem);
+   LoraSerial.print(",");
+
+   LoraSerial.print("GPS_İRTİFA=");
+   LoraSerial.print(altitude);
+   LoraSerial.print(",");
+
+  LoraSerial.print("Basinc_İRTİFA=");
+   LoraSerial.print(irtifaBasinc);
+   LoraSerial.print(",");
+
+  LoraSerial.print("Gyro_X=");
+   LoraSerial.print(gyroX);
+   LoraSerial.print(",");
+
+  LoraSerial.print("Gyro_Y=");
+   LoraSerial.print(gyroY);
+   LoraSerial.print(",");
+
+   LoraSerial.print("Gyro_Z=");
+   LoraSerial.print(gyroZ);
+   LoraSerial.print(",");
+
+  LoraSerial.print("Accel_X=");
+   LoraSerial.print(roketAci_X);
+   LoraSerial.print(",");
+
+   LoraSerial.print("Accel_Y=");
+   LoraSerial.print(roketAci_Y);
+   LoraSerial.print(",");
+
+   LoraSerial.print("Accel_Z=");
+   LoraSerial.print(roketAci_Z);
+   LoraSerial.print(",");
+
+   LoraSerial.print("Parasut Durum=");
+   LoraSerial.print(p_durum);
+   LoraSerial.print(",");
+
+
+float xAccel =roketAci_X; // X eksenindeki ivme değeri
+float yAccel = roketAci_Y; // Y eksenindeki ivme değeri
+float zAccel = roketAci_Z; // Z eksenindeki ivme değeri
+
+
+float xAngle = atan2(xAccel, sqrt(yAccel * yAccel + zAccel * zAccel));
+float yAngle = atan2(yAccel, sqrt(xAccel * xAccel + zAccel * zAccel));
+float zAngle = atan2(sqrt(xAccel * xAccel + yAccel * yAccel), zAccel);
+
+   LoraSerial.print("RealGyro_X=");
+   LoraSerial.print(xAngle);
+   LoraSerial.print(",");
+
+   LoraSerial.print("RealGyro_Y=");
+   LoraSerial.print(yAngle);
+   LoraSerial.print(",");
+
+   LoraSerial.print("RealGyro_Z=");
+   LoraSerial.print(zAngle);
+   LoraSerial.print(",");
+
+   LoraSerial.println("#EOD");
+
+  delay(700);
   }
 }
 
 void loop() {}
+
