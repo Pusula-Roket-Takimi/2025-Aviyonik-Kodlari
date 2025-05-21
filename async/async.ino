@@ -76,7 +76,7 @@ void setup() {
   #ifdef TESTMODU
   Serial.begin(115200);
   #endif
-
+Serial.begin(115200);
   // LoRa başlatma
   LoraSerial.begin(9600, SERIAL_8N1, LoraRX, LoraTX);
   // GPS başlatma
@@ -137,14 +137,13 @@ void Kurtarma(void* pvParameters) {
 
     P2 = P2 + Q2;
     K2 = P2 / (P2 + R2);
-    X2 = X2 + K1 * (roketAci_Y - X2);
+    X2 = X2 + K2 * (roketAci_Y - X2);
     P2 = (1 - K2) * P2;
-
     float new_irtifa = bmp.readAltitude(X);
     if (new_irtifa < irtifaBasinc) {
       irtifaKaybi=1;
     }
-    if(X1>75 || X2>75 )
+    if(X1 <55 || X2 >75  )
     {
       roketYatma=1;
     }
@@ -207,7 +206,7 @@ void Haberlesme(void* pvParameters) {
 
     // LoRa'ya paket gönderimi
     LoraSerial.write((byte)0x00);
-    LoraSerial.write(0x17);
+    LoraSerial.write(0x15);
     LoraSerial.write(0x12);
     LoraSerial.println(VeriPaketi);
     delay(700);
