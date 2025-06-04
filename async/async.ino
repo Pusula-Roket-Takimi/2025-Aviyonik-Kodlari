@@ -52,7 +52,8 @@ int irtifaKaybi = 0;
 int roketYatma = 0;
 int tetiklenmeSayisi=0;
 float basinc, roketivme_X, roketivme_Y, roketivme_Z ,gyroX,gyroY,gyroZ,new_irtifa;
-double enlem, boylam, altitude;
+String enlem, boylam;
+double altitude;
 //Değişken Tanımlamaları
 void setup() {
   #ifdef TESTMODU
@@ -169,8 +170,8 @@ void Haberlesme(void* pvParameters) {
     if (GpsSerial.available()) {
       if (gps.encode(GpsSerial.read())) {
         if (gps.location.isValid() && gps.altitude.isValid()) {
-          enlem = gps.location.lat();
-          boylam =gps.location.lng();
+           enlem = String(gps.location.lat(),6);
+           boylam =String(gps.location.lng(),6);
 
 
            altitude = gps.altitude.meters();
@@ -179,8 +180,8 @@ void Haberlesme(void* pvParameters) {
         }
       }
     } else {
-      enlem = 0.000000;
-      boylam = 0.000000;
+      enlem = "0.000000";
+      boylam = "0.000000";
       altitude = 00.0;
     }
     // LoRa'ya paket gönderimi
