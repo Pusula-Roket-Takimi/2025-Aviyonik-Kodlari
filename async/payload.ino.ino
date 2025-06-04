@@ -1,7 +1,7 @@
 #include <DHT.h>
 #include <DHT_U.h>
 #include <HardwareSerial.h>
-#include <Arduino.h>
+
 #include <TinyGPS++.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
@@ -49,8 +49,8 @@ void loop() {
     if (GpsSerial.available()) {
       if (gps.encode(GpsSerial.read())) {
         if (gps.location.isValid() && gps.altitude.isValid()) {
-          degiskenler.enlem = gps.location.lat();
-          degiskenler.boylam =gps.location.lng();
+          degiskenler.enlem = String(gps.location.lat(),6);
+          degiskenler.boylam =String(gps.location.lng(),6);
 
 
            degiskenler.altitude = gps.altitude.meters();
