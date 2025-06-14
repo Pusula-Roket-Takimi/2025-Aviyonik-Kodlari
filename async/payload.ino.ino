@@ -79,7 +79,7 @@ void loop() {
   LoraSerial.write(0x15);//kanallar değiştirilecek
   LoraSerial.write(0x12);//kanallar değiştirilecek
   
-  LoraSerial.print("#BOD,");
+  LoraSerial.print("#BOD_Gorev_Yuku,");
    LoraSerial.print("BOYLAM=");
    LoraSerial.print(degiskenler.boylam);
    LoraSerial.print(",");
@@ -144,7 +144,7 @@ void loop() {
    LoraSerial.print(degiskenler.zAngle);
    LoraSerial.print(",");
 
-   LoraSerial.println("#EOD");
+   LoraSerial.println("#EOD_Gorev_Yuku");
 
   delay(1500);
   
