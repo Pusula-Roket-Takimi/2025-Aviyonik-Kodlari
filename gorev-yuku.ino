@@ -1,3 +1,6 @@
+
+
+
 #include <DHT.h>
 #include <DHT_U.h>
 #include <HardwareSerial.h>
@@ -7,6 +10,8 @@
 #include <Adafruit_BMP280.h>
 #include "lsm6dsm.h"
 //Önİşlemci Tanımlamaları
+TaskHandle_t Task1;
+TaskHandle_t Task2;
 #define GpsRX D8
 #define GpsTX D9
 #define buzzer D4
@@ -34,6 +39,7 @@ String enlem, boylam;
 
 //Değişken Tanımlamaları
 void setup() {
+
   // LoRa başlatma
   LoraSerial.begin(9600, SERIAL_8N1, LoraRX, LoraTX);
   // GPS başlatma
@@ -44,10 +50,29 @@ void setup() {
   digitalWrite(buzzer, HIGH);
   delay(2000);
   digitalWrite(buzzer, LOW);
+   xTaskCreatePinnedToCore(
+    Degiskenler, /* Task function. */
+    "Task1",  /* name of task. */
+    10000,    /* Stack size of task */
+    NULL,     /* parameter of the task */
+    1,        /* priority of the task */
+    &Task1,   /* Task handle to keep track of created task */
+    0);       /* pin task to core 0 */
+  delay(500);
+   xTaskCreatePinnedToCore(
+    Haberlesme, /* Task function. */
+    "Task2",    /* name of task. */
+    10000,      /* Stack size of task */
+    NULL,       /* parameter of the task */
+    1,          /* priority of the task */
+    &Task2,  /* Task handle to keep track of created task */
+    1);         /* pin task to core 1 */
+  delay(500);
 }
-
-void loop() { 
-    if (GpsSerial.available()) {
+void Degiskenler(void* pvParameters) {
+  
+  for (;;) {
+     if (GpsSerial.available()) {
       if (gps.encode(GpsSerial.read())) {
         if (gps.location.isValid() && gps.altitude.isValid()) {
           degiskenler.enlem = String(gps.location.lat(),6);
@@ -64,6 +89,7 @@ void loop() {
       degiskenler.boylam = 0.000000;
       degiskenler.altitude = 00.0;
     }
+
      degiskenler.sicaklik = dht.readTemperature();
      degiskenler.nem = dht.readHumidity();
      degiskenler.basinc = bmp.readPressure();
@@ -76,7 +102,15 @@ void loop() {
      degiskenler.irtifaBasinc = bmp.readAltitude(degiskenler.basinc);
      degiskenler.new_irtifa = bmp.readAltitude(degiskenler.basinc);
 
-  LoraSerial.write((byte)0x00);//adresler değiştirilecek
+  }
+}
+
+void Haberlesme(void* pvParameters) {
+  
+
+
+  for (;;) {
+   LoraSerial.write((byte)0x00);//adresler değiştirilecek
   LoraSerial.write(0x15);//adresler değiştirilecek
   LoraSerial.write(0x12);//adresler değiştirilecek
   
@@ -153,6 +187,10 @@ void loop() {
    LoraSerial.println("#EOD");
 
   delay(1800);
-  
-  
+
+  }
+}
+
+
+void loop() { 
 }
