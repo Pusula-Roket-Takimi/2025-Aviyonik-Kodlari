@@ -202,6 +202,11 @@ void Haberlesme(void* pvParameters) {
    LoraSerial.print(altitude);
    LoraSerial.print(",");
 
+
+   LoraSerial.print("BASINC=");
+   LoraSerial.print(Basinc_Kalman);
+   LoraSerial.print(",");
+
   LoraSerial.print("BASINC_IRTIFA=");
    LoraSerial.print(irtifaBasinc);
    LoraSerial.print(",");
