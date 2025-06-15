@@ -1,6 +1,4 @@
 
-
-
 #include <DHT.h>
 #include <DHT_U.h>
 #include <HardwareSerial.h>
@@ -8,7 +6,7 @@
 #include <TinyGPS++.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
-#include "lsm6dsm.h"
+#include <lsm6dsm.h>
 //Önİşlemci Tanımlamaları
 TaskHandle_t Task1;
 TaskHandle_t Task2;
