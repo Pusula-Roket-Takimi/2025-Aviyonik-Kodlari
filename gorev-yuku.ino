@@ -39,7 +39,7 @@ String enlem, boylam;
 
 //Değişken Tanımlamaları
 void setup() {
-
+  
   // LoRa başlatma
   LoraSerial.begin(9600, SERIAL_8N1, LoraRX, LoraTX);
   // GPS başlatma
@@ -85,8 +85,8 @@ void Degiskenler(void* pvParameters) {
         }
       }
     } else {
-      degiskenler.enlem = 0.000000;
-      degiskenler.boylam = 0.000000;
+      degiskenler.enlem = "0.000000";
+      degiskenler.boylam = "0.000000";
       degiskenler.altitude = 00.0;
     }
 
@@ -100,7 +100,7 @@ void Degiskenler(void* pvParameters) {
      degiskenler.gyroY= abs(IMU.readFloatGyroY()) * 100;
      degiskenler.gyroX= abs(IMU.readFloatGyroZ()) * 100;
      degiskenler.irtifaBasinc = bmp.readAltitude(degiskenler.basinc);
-     degiskenler.new_irtifa = bmp.readAltitude(degiskenler.basinc);
+     
 
   }
 }
@@ -111,10 +111,10 @@ void Haberlesme(void* pvParameters) {
 
   for (;;) {
    LoraSerial.write((byte)0x00);//adresler değiştirilecek
-  LoraSerial.write(0x15);//adresler değiştirilecek
-  LoraSerial.write(0x12);//adresler değiştirilecek
+   LoraSerial.write(0x15);//adresler değiştirilecek
+   LoraSerial.write(0x12);//adresler değiştirilecek
   
-  LoraSerial.print("#BOD_Gorev_Yuku,");
+   LoraSerial.print("#BOD_Gorev_Yuku,");
    LoraSerial.print("BOYLAM=");
    LoraSerial.print(degiskenler.boylam);
    LoraSerial.print(",");
@@ -123,12 +123,12 @@ void Haberlesme(void* pvParameters) {
    LoraSerial.print(degiskenler.enlem);
    LoraSerial.print(",");
 
-   LoraSerial.print("GPS_IRTIFA=");
+  LoraSerial.print("GPS_IRTIFA=");
    LoraSerial.print(degiskenler.altitude);
    LoraSerial.print(",");
 
 
-  LoraSerial.print("BASINC=");
+   LoraSerial.print("BASINC=");
    LoraSerial.print(degiskenler.basinc);
    LoraSerial.print(",");
 
@@ -185,7 +185,7 @@ void Haberlesme(void* pvParameters) {
    LoraSerial.print(",");
 
    LoraSerial.println("#EOD");
-
+    
   delay(1800);
 
   }
