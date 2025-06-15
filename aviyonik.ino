@@ -4,7 +4,7 @@
 #include <TinyGPS++.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
-#include "lsm6dsm.h"
+#include <lsm6dsm.h>
 TaskHandle_t Task1;
 TaskHandle_t Task2;
 // Kalman filtresi değişkenleri
