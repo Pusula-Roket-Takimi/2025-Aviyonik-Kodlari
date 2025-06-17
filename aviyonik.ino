@@ -1,6 +1,6 @@
 
 #include <HardwareSerial.h>
-
+//#define TESTMODU 1
 #include <TinyGPS++.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
