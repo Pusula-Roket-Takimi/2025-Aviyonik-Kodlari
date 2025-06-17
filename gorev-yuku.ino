@@ -112,57 +112,57 @@ void Haberlesme(void* pvParameters) {
    LoraSerial.write(0x15);//adresler değiştirilecek
    LoraSerial.write(0x12);//adresler değiştirilecek
   
-   LoraSerial.print("#BOD_Gorev_Yuku,");
-   LoraSerial.print("BOYLAM=");
+   LoraSerial.print("#BOD_Gorev,");
+   LoraSerial.print("B=");
    LoraSerial.print(degiskenler.boylam);
    LoraSerial.print(",");
 
-   LoraSerial.print("ENLEM=");
+   LoraSerial.print("E=");
    LoraSerial.print(degiskenler.enlem);
    LoraSerial.print(",");
 
-  LoraSerial.print("GPS_IRTIFA=");
+  LoraSerial.print("GI=");
    LoraSerial.print(degiskenler.altitude);
    LoraSerial.print(",");
 
 
-   LoraSerial.print("BASINC=");
+   LoraSerial.print("P=");
    LoraSerial.print(degiskenler.basinc);
    LoraSerial.print(",");
 
-  LoraSerial.print("BASINC_IRTIFA=");
+  LoraSerial.print("PI=");
    LoraSerial.print(degiskenler.irtifaBasinc);
    LoraSerial.print(",");
 
-  LoraSerial.print("GYRO_X=");
+  LoraSerial.print("GX=");
    LoraSerial.print(degiskenler.gyroX);
    LoraSerial.print(",");
 
-  LoraSerial.print("GYRO_Y=");
+  LoraSerial.print("GY=");
    LoraSerial.print(degiskenler.gyroY);
    LoraSerial.print(",");
 
-   LoraSerial.print("GYRO_Z=");
+   LoraSerial.print("GZ=");
    LoraSerial.print(degiskenler.gyroZ);
    LoraSerial.print(",");
 
-  LoraSerial.print("ACCEL_X=");
+  LoraSerial.print("AX=");
    LoraSerial.print(degiskenler.roketivme_X);
    LoraSerial.print(",");
 
-   LoraSerial.print("ACCEL_Y=");
+   LoraSerial.print("AY=");
    LoraSerial.print(degiskenler.roketivme_Y);
    LoraSerial.print(",");
 
-   LoraSerial.print("ACCEL_Z=");
+   LoraSerial.print("AZ=");
    LoraSerial.print(degiskenler.roketivme_Z);
    LoraSerial.print(",");
 
-   LoraSerial.print("SICAKLIK=");
+   LoraSerial.print("T=");
    LoraSerial.print(degiskenler.sicaklik);
    LoraSerial.print(",");
 
-   LoraSerial.print("NEM=");
+   LoraSerial.print("H=");
    LoraSerial.print(degiskenler.nem);
    LoraSerial.print(",");
 
@@ -170,19 +170,19 @@ void Haberlesme(void* pvParameters) {
    degiskenler.yAngle = atan2(degiskenler.roketivme_Y, sqrt(degiskenler.roketivme_X * degiskenler.roketivme_X + degiskenler.roketivme_Z * degiskenler.roketivme_Z));
    degiskenler.zAngle = atan2(sqrt(degiskenler.roketivme_X * degiskenler.roketivme_X + degiskenler.roketivme_Y * degiskenler.roketivme_Y), degiskenler.roketivme_Z);
 
-   LoraSerial.print("REALGYRO_X=");
+   LoraSerial.print("RGX=");
    LoraSerial.print(degiskenler.xAngle);
    LoraSerial.print(",");
 
-   LoraSerial.print("REALGYRO_Y=");
+   LoraSerial.print("RGY=");
    LoraSerial.print(degiskenler.yAngle);
    LoraSerial.print(",");
 
-   LoraSerial.print("REALGYRO_Z=");
+   LoraSerial.print("RGZ=");
    LoraSerial.print(degiskenler.zAngle);
    LoraSerial.print(",");
 
-   LoraSerial.println("#EOD");
+   LoraSerial.println("#EOD_Gorev");
     
   delay(1800);
 
