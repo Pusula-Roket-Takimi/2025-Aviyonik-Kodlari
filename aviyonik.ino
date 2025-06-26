@@ -190,52 +190,52 @@ void Haberlesme(void* pvParameters) {
     LoraSerial.write(0x12);
   
    LoraSerial.print("#BOD,");
-   LoraSerial.print("BOYLAM=");
+   LoraSerial.print("B=");
    LoraSerial.print(boylam);
    LoraSerial.print(",");
 
-   LoraSerial.print("ENLEM=");
+   LoraSerial.print("E=");
    LoraSerial.print(enlem);
    LoraSerial.print(",");
 
-   LoraSerial.print("GPS_IRTIFA=");
+   LoraSerial.print("GI=");
    LoraSerial.print(altitude);
    LoraSerial.print(",");
 
 
-   LoraSerial.print("BASINC=");
+   LoraSerial.print("P=");
    LoraSerial.print(Basinc_Kalman);
    LoraSerial.print(",");
 
-  LoraSerial.print("BASINC_IRTIFA=");
+  LoraSerial.print("PI=");
    LoraSerial.print(irtifaBasinc);
    LoraSerial.print(",");
 
-  LoraSerial.print("GYRO_X=");
+  LoraSerial.print("GX=");
    LoraSerial.print(gyroX);
    LoraSerial.print(",");
 
-  LoraSerial.print("GYRO_Y=");
+  LoraSerial.print("GY=");
    LoraSerial.print(gyroY);
    LoraSerial.print(",");
 
-   LoraSerial.print("GYRO_Z=");
+   LoraSerial.print("GZ=");
    LoraSerial.print(gyroZ);
    LoraSerial.print(",");
 
-  LoraSerial.print("ACCEL_X=");
+  LoraSerial.print("AX=");
    LoraSerial.print(roketivme_X);
    LoraSerial.print(",");
 
-   LoraSerial.print("ACCEL_Y=");
+   LoraSerial.print("AY=");
    LoraSerial.print(roketivme_Y);
    LoraSerial.print(",");
 
-   LoraSerial.print("ACCEL_Z=");
+   LoraSerial.print("AZ=");
    LoraSerial.print(roketivme_Z);
    LoraSerial.print(",");
 
-   LoraSerial.print("PARASUT_DURUM=");
+   LoraSerial.print("PD=");
    LoraSerial.print(p_durum);
    LoraSerial.print(",");
 
@@ -246,15 +246,15 @@ float xAngle = atan2(roketivme_X, sqrt(roketivme_Y * roketivme_Y + roketivme_Z *
 float yAngle = atan2(roketivme_Y, sqrt(roketivme_X * roketivme_X + roketivme_Z * roketivme_Z));
 float zAngle = atan2(sqrt(roketivme_X * roketivme_X + roketivme_Y * roketivme_Y), roketivme_Z);
 
-   LoraSerial.print("REALGYRO_X=");
+   LoraSerial.print("RGX=");
    LoraSerial.print(xAngle);
    LoraSerial.print(",");
 
-   LoraSerial.print("REALGYRO_Y=");
+   LoraSerial.print("RGY=");
    LoraSerial.print(yAngle);
    LoraSerial.print(",");
 
-   LoraSerial.print("REALGYRO_Z=");
+   LoraSerial.print("RGZ=");
    LoraSerial.print(zAngle);
    LoraSerial.print(",");
 
