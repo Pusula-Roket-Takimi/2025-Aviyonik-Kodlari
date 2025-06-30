@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Yer İstasyonu - Aviyonik & Görev Yükü & HYİ</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #121212; color: #eee; margin: 0; padding: 20px; }
+    h2 { border-bottom: 2px solid #555; padding-bottom: 4px; }
+    select, button { font-size: 1rem; margin-right: 10px; padding: 5px 10px; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 30px; background: #222; }
+    th, td { border: 1px solid #444; padding: 6px 10px; text-align: left; }
+    th { background: #333; }
+    #log { background: #222; padding: 10px; height: 120px; overflow-y: scroll; font-family: monospace; margin-top: 20px; border: 1px solid #444; }
+    .container { display: flex; gap: 20px; }
+    .section { flex: 1; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h1>Yer İstasyonu</h1>
+  
+  <div class="container">
+    <div class="section">
+      <h2>Veri Bağlantısı</h2>
+      <div>
+        <label>Veri Portu:</label>
+        <select id="portSelect"></select>
+        <button id="connectBtn">Bağlan</button>
+        <button id="disconnectBtn" disabled>Bağlantıyı Kes</button>
+      </div>
+      
+      <h2>Aviyonik Verisi</h2>
+      <table id="aviyonikTable">
+        <thead><tr><th>Parametre</th><th>Değer</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    
+    <div class="section">
+      <h2>Görev Yükü Verisi</h2>
+      <table id="gorevTable">
+        <thead><tr><th>Parametre</th><th>Değer</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      
+      <h2>HYİ Veri Gönderimi</h2>
+      <div>
+        <label>HYİ Portu:</label>
+        <select id="hyiPortSelect"></select>
+        <button id="hyiConnectBtn">Bağlan</button>
+        <button id="sendHYIBtn" disabled>HYİ Verisi Gönder</button>
+      </div>
+    </div>
+  </div>
+  
+  <h2>Log</h2>
+  <div id="log"></div>
+
+  <script>
+    const logDiv = document.getElementById('log');
+    const aviyonikTableBody = document.querySelector('#aviyonikTable tbody');
+    const gorevTableBody = document.querySelector('#gorevTable tbody');
+    let pollingInterval;
+
+    function log(msg) {
+      const now = new Date().toLocaleTimeString();
+      logDiv.textContent += `[${now}] ${msg}\n`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    // Port listesini getir
+    async function getPorts() {
+      try {
+        const response = await fetch('/api/ports');
+        if (!response.ok) throw new Error(await response.text());
+        const ports = await response.json();
+        
+        const portSelect = document.getElementById('portSelect');
+        const hyiPortSelect = document.getElementById('hyiPortSelect');
+        
+        portSelect.innerHTML = '<option value="">Port seçin</option>';
+        hyiPortSelect.innerHTML = '<option value="">Port seçin</option>';
+        
+        ports.forEach(port => {
+          const option = document.createElement('option');
+          option.value = port.path;
+          option.textContent = `${port.path} (${port.manufacturer || 'Bilinmiyor'})`;
+          portSelect.appendChild(option.cloneNode(true));
+          hyiPortSelect.appendChild(option);
+        });
+      } catch (err) {
+        log('Port listesi alınamadı: ' + err.message);
+        console.error(err);
+      }
+    }
+
+    // Veri portu bağlantısı
+    document.getElementById('connectBtn').addEventListener('click', async () => {
+      const portPath = document.getElementById('portSelect').value;
+      if (!portPath) return alert('Lütfen bir port seçin');
+      
+      try {
+        const response = await fetch('/api/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ portPath })
+        });
+        const result = await response.json();
+        log(result.message);
+        document.getElementById('disconnectBtn').disabled = false;
+        document.getElementById('connectBtn').disabled = true;
+        startPolling();
+      } catch (err) {
+        log('Bağlantı hatası: ' + err.message);
+      }
+    });
+
+    document.getElementById('disconnectBtn').addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/disconnect', { method: 'POST' });
+        const result = await response.json();
+        log(result.message);
+        document.getElementById('disconnectBtn').disabled = true;
+        document.getElementById('connectBtn').disabled = false;
+        stopPolling();
+      } catch (err) {
+        log('Bağlantı kesme hatası: ' + err.message);
+      }
+    });
+
+    // HYI portu bağlantısı
+    document.getElementById('hyiConnectBtn').addEventListener('click', async () => {
+      const portPath = document.getElementById('hyiPortSelect').value;
+      if (!portPath) return alert('Lütfen bir port seçin');
+      
+      try {
+        const response = await fetch('/api/hyi/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ portPath })
+        });
+        const result = await response.json();
+        log(result.message);
+        document.getElementById('sendHYIBtn').disabled = false;
+      } catch (err) {
+        log('HYI bağlantı hatası: ' + err.message);
+      }
+    });
+
+    document.getElementById('sendHYIBtn').addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/hyi/send', { method: 'POST' });
+        const result = await response.json();
+        log(result.message);
+      } catch (err) {
+        log('HYI gönderme hatası: ' + err.message);
+      }
+    });
+
+    // Veri güncelleme için polling
+    function startPolling() {
+      updateTables();
+      pollingInterval = setInterval(updateTables, 1000);
+      log('Veri güncelleme başlatıldı');
+    }
+
+    function stopPolling() {
+      clearInterval(pollingInterval);
+      log('Veri güncelleme durduruldu');
+    }
+
+    async function updateTables() {
+      try {
+        const [aviyonikRes, gorevRes] = await Promise.all([
+          fetch('/api/aviyonik'),
+          fetch('/api/gorev')
+        ]);
+        
+        if (!aviyonikRes.ok || !gorevRes.ok) {
+          throw new Error('Veri alınamadı');
+        }
+        
+        const aviyonikData = await aviyonikRes.json();
+        const gorevData = await gorevRes.json();
+        
+        updateTable(aviyonikTableBody, aviyonikData);
+        updateTable(gorevTableBody, gorevData);
+      } catch (err) {
+        console.error('Veri güncelleme hatası:', err);
+      }
+    }
+
+    function updateTable(tbody, data) {
+      tbody.innerHTML = '';
+      for (let key in data) {
+        const tr = document.createElement('tr');
+        const tdKey = document.createElement('td');
+        tdKey.textContent = key;
+        const tdVal = document.createElement('td');
+        tdVal.textContent = data[key];
+        tr.appendChild(tdKey);
+        tr.appendChild(tdVal);
+        tbody.appendChild(tr);
+      }
+    }
+
+    // Sayfa yüklendiğinde port listesini al
+    document.addEventListener('DOMContentLoaded', () => {
+      getPorts();
+      log('Yer istasyonu arayüzü başlatıldı');
+    });
+  </script>
+</body>
+</html>
