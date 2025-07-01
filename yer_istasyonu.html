@@ -11,16 +11,26 @@
   th, td { border: 1px solid #444; padding: 6px 10px; text-align: left; }
   th { background: #333; }
   #log { background: #222; padding: 10px; height: 120px; overflow-y: scroll; font-family: monospace; margin-top: 20px; border: 1px solid #444; }
+  .connection-status { display: inline-block; margin-left: 10px; padding: 2px 8px; border-radius: 3px; font-size: 0.8em; }
+  .connected { background: #28a745; color: white; }
+  .disconnected { background: #dc3545; color: white; }
 </style>
 </head>
 <body>
 
 <h1>Yer İstasyonu</h1>
 
-<!-- Ana bağlantı -->
-<label>Veri Port Seç:</label>
-<button id="connectBtn">Bağlan</button>
-<button id="disconnectBtn" disabled>Bağlantıyı Kes</button>
+<!-- Aviyonik bağlantı -->
+<h3>Aviyonik Bağlantısı</h3>
+<button id="connectBtn">Aviyonik Bağlan</button>
+<button id="disconnectBtn" disabled>Aviyonik Bağlantıyı Kes</button>
+<span id="aviyonikStatus" class="connection-status disconnected">Bağlı Değil</span>
+
+<!-- Görev Yükü bağlantı -->
+<h3>Görev Yükü Bağlantısı</h3>
+<button id="connectGorevBtn">Görev Yükü Bağlan</button>
+<button id="disconnectGorevBtn" disabled>Görev Yükü Bağlantıyı Kes</button>
+<span id="gorevStatus" class="connection-status disconnected">Bağlı Değil</span>
 
 <h2>Aviyonik Verisi</h2>
 <table id="aviyonikTable"><thead><tr><th>Parametre</th><th>Değer</th></tr></thead><tbody></tbody></table>
@@ -30,67 +40,147 @@
 
 <!-- HYI Bağlantısı ve veri gönderimi -->
 <h2>HYİ Veri Gönderimi</h2>
-<label>HYİ Port Seç:</label>
-<button id="hyiConnectBtn">Bağlan</button>
+<button id="hyiConnectBtn">HYİ Bağlan</button>
 <button id="sendHYIBtn" disabled>HYİ Verisi Gönder</button>
+<span id="hyiStatus" class="connection-status disconnected">Bağlı Değil</span>
 
 <h2>Log</h2>
 <div id="log"></div>
 
 <script>
-let port = null;
-let reader = null;
-let inputDone;
-let inputStream;
-let lastAviyonikData = {};
-let lastGorevData = {};
+// Aviyonik port değişkenleri
+let aviyonikPort = null;
+let aviyonikReader = null;
+let aviyonikInputDone;
+let aviyonikInputStream;
 
+// Görev Yükü port değişkenleri
+let gorevPort = null;
+let gorevReader = null;
+let gorevInputDone;
+let gorevInputStream;
+
+// HYİ port değişkenleri
 let hyiPort = null;
 let hyiWriter = null;
 let hyiSayac = 0;
-const takimId = 42; // Takım ID buradan belirlenebilir
+const takimId = 42;
 
+// Veri saklama
+let lastAviyonikData = {};
+let lastGorevData = {};
+
+// DOM elementleri
 const logDiv = document.getElementById('log');
 const aviyonikTableBody = document.querySelector('#aviyonikTable tbody');
 const gorevTableBody = document.querySelector('#gorevTable tbody');
+const aviyonikStatus = document.getElementById('aviyonikStatus');
+const gorevStatus = document.getElementById('gorevStatus');
+const hyiStatus = document.getElementById('hyiStatus');
 
 function log(msg) {
-  logDiv.textContent += msg + '\n';
+  const timestamp = new Date().toLocaleTimeString();
+  logDiv.textContent += `[${timestamp}] ${msg}\n`;
   logDiv.scrollTop = logDiv.scrollHeight;
 }
 
+function updateStatus(element, connected) {
+  if (connected) {
+    element.textContent = 'Bağlı';
+    element.className = 'connection-status connected';
+  } else {
+    element.textContent = 'Bağlı Değil';
+    element.className = 'connection-status disconnected';
+  }
+}
+
+// Aviyonik bağlantı
 document.getElementById('connectBtn').addEventListener('click', async () => {
-  port = await navigator.serial.requestPort();
-  await port.open({ baudRate: 115200 });
-  log('Veri portuna bağlanıldı.');
-  document.getElementById('disconnectBtn').disabled = false;
-  document.getElementById('connectBtn').disabled = true;
-  listenToPort();
+  try {
+    aviyonikPort = await navigator.serial.requestPort();
+    await aviyonikPort.open({ baudRate: 115200 });
+    log('Aviyonik portuna bağlanıldı.');
+    document.getElementById('disconnectBtn').disabled = false;
+    document.getElementById('connectBtn').disabled = true;
+    updateStatus(aviyonikStatus, true);
+    listenToAviyonikPort();
+  } catch (error) {
+    log('Aviyonik bağlantı hatası: ' + error);
+  }
 });
 
 document.getElementById('disconnectBtn').addEventListener('click', async () => {
-  if (reader) {
-    await reader.cancel();
-    await inputDone.catch(() => {});
-    reader = null;
-    inputDone = null;
-  }
-  if (port) await port.close();
-  port = null;
-  log('Port kapatıldı.');
-  document.getElementById('disconnectBtn').disabled = true;
-  document.getElementById('connectBtn').disabled = false;
+  await disconnectAviyonik();
 });
 
-async function listenToPort() {
+async function disconnectAviyonik() {
+  try {
+    if (aviyonikReader) {
+      await aviyonikReader.cancel();
+      await aviyonikInputDone.catch(() => {});
+      aviyonikReader = null;
+      aviyonikInputDone = null;
+    }
+    if (aviyonikPort) await aviyonikPort.close();
+    aviyonikPort = null;
+    log('Aviyonik port kapatıldı.');
+    document.getElementById('disconnectBtn').disabled = true;
+    document.getElementById('connectBtn').disabled = false;
+    updateStatus(aviyonikStatus, false);
+  } catch (error) {
+    log('Aviyonik kapatma hatası: ' + error);
+  }
+}
+
+// Görev Yükü bağlantı
+document.getElementById('connectGorevBtn').addEventListener('click', async () => {
+  try {
+    gorevPort = await navigator.serial.requestPort();
+    await gorevPort.open({ baudRate: 115200 });
+    log('Görev Yükü portuna bağlanıldı.');
+    document.getElementById('disconnectGorevBtn').disabled = false;
+    document.getElementById('connectGorevBtn').disabled = true;
+    updateStatus(gorevStatus, true);
+    listenToGorevPort();
+  } catch (error) {
+    log('Görev Yükü bağlantı hatası: ' + error);
+  }
+});
+
+document.getElementById('disconnectGorevBtn').addEventListener('click', async () => {
+  await disconnectGorev();
+});
+
+async function disconnectGorev() {
+  try {
+    if (gorevReader) {
+      await gorevReader.cancel();
+      await gorevInputDone.catch(() => {});
+      gorevReader = null;
+      gorevInputDone = null;
+    }
+    if (gorevPort) await gorevPort.close();
+    gorevPort = null;
+    log('Görev Yükü port kapatıldı.');
+    document.getElementById('disconnectGorevBtn').disabled = true;
+    document.getElementById('connectGorevBtn').disabled = false;
+    updateStatus(gorevStatus, false);
+  } catch (error) {
+    log('Görev Yükü kapatma hatası: ' + error);
+  }
+}
+
+// Aviyonik port dinleme
+async function listenToAviyonikPort() {
   const textDecoder = new TextDecoderStream();
-  inputDone = port.readable.pipeTo(textDecoder.writable);
-  inputStream = textDecoder.readable;
-  reader = inputStream.getReader();
+  aviyonikInputDone = aviyonikPort.readable.pipeTo(textDecoder.writable);
+  aviyonikInputStream = textDecoder.readable;
+  aviyonikReader = aviyonikInputStream.getReader();
   let buffer = '';
+  
   try {
     while (true) {
-      const { value, done } = await reader.read();
+      const { value, done } = await aviyonikReader.read();
       if (done) break;
       if (value) {
         buffer += value;
@@ -99,31 +189,76 @@ async function listenToPort() {
         for (let line of lines) {
           line = line.trim();
           if (!line) continue;
-          log('Gelen: ' + line);
-          parseLine(line);
+          log('Aviyonik: ' + line);
+          parseAviyonikLine(line);
         }
       }
     }
   } catch (error) {
-    log('Okuma hatası: ' + error);
+    log('Aviyonik okuma hatası: ' + error);
+    await disconnectAviyonik();
   } finally {
-    reader.releaseLock();
+    if (aviyonikReader) aviyonikReader.releaseLock();
   }
 }
 
-function parseLine(line) {
+// Görev Yükü port dinleme
+async function listenToGorevPort() {
+  const textDecoder = new TextDecoderStream();
+  gorevInputDone = gorevPort.readable.pipeTo(textDecoder.writable);
+  gorevInputStream = textDecoder.readable;
+  gorevReader = gorevInputStream.getReader();
+  let buffer = '';
+  
+  try {
+    while (true) {
+      const { value, done } = await gorevReader.read();
+      if (done) break;
+      if (value) {
+        buffer += value;
+        let lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (let line of lines) {
+          line = line.trim();
+          if (!line) continue;
+          log('Görev Yükü: ' + line);
+          parseGorevLine(line);
+        }
+      }
+    }
+  } catch (error) {
+    log('Görev Yükü okuma hatası: ' + error);
+    await disconnectGorev();
+  } finally {
+    if (gorevReader) gorevReader.releaseLock();
+  }
+}
+
+function parseAviyonikLine(line) {
   if (line.startsWith('#BOD,') && line.endsWith('#EOD')) {
     let content = line.slice(5, -4);
     const parsed = parseKeyValueString(content);
     lastAviyonikData = parsed;
     updateTable(aviyonikTableBody, parsed);
-  } else if (line.startsWith('#BOD_Gorev,') && line.endsWith('#EOD_Gorev')) {
-    let content = line.slice(10, -9);
+  } else {
+    log('Bilinmeyen aviyonik format: ' + line);
+  }
+}
+
+function parseGorevLine(line) {
+  if (line.startsWith('#BOD_Gorev,') && line.endsWith('#EOD_Gorev')) {
+    let content = line.slice(11, -10);
+    const parsed = parseKeyValueString(content);
+    lastGorevData = parsed;
+    updateTable(gorevTableBody, parsed);
+  } else if (line.startsWith('#BOD,') && line.endsWith('#EOD')) {
+    // Eğer görev yükü de normal format gönderiyorsa
+    let content = line.slice(5, -4);
     const parsed = parseKeyValueString(content);
     lastGorevData = parsed;
     updateTable(gorevTableBody, parsed);
   } else {
-    log('Bilinmeyen format: ' + line);
+    log('Bilinmeyen görev yükü format: ' + line);
   }
 }
 
@@ -167,21 +302,24 @@ function buildHYIPacket() {
     return parseFloat(obj[key] || 0);
   }
 
+  // Aviyonik verilerinden
   const irtifa = safeFloat(lastAviyonikData, 'PI');
   const gpsIrtifa = safeFloat(lastAviyonikData, 'GI');
   const enlem = safeFloat(lastAviyonikData, 'E');
   const boylam = safeFloat(lastAviyonikData, 'B');
-  const gGI = safeFloat(lastGorevData, 'GI');
-  const gE = safeFloat(lastGorevData, 'E') ;
-  const gB = safeFloat(lastGorevData, 'B');
-  const gyroX = safeFloat(lastAviyonikData, 'GX')  * Math.PI /180;
-  const gyroY = safeFloat(lastAviyonikData, 'GY')  * Math.PI /180;
-  const gyroZ = safeFloat(lastAviyonikData, 'GZ')  * Math.PI /180;
+  const gyroX = safeFloat(lastAviyonikData, 'GX') * Math.PI / 180;
+  const gyroY = safeFloat(lastAviyonikData, 'GY') * Math.PI / 180;
+  const gyroZ = safeFloat(lastAviyonikData, 'GZ') * Math.PI / 180;
   const accX = safeFloat(lastAviyonikData, 'AX') * 9.80665;
   const accY = safeFloat(lastAviyonikData, 'AY') * 9.80665;
   const accZ = safeFloat(lastAviyonikData, 'AZ') * 9.80665;
   const angle = safeFloat(lastAviyonikData, 'RGZ');
   const durum = parseInt(lastAviyonikData['PD'] || 0);
+
+  // Görev yükü verilerinden
+  const gGI = safeFloat(lastGorevData, 'GI');
+  const gE = safeFloat(lastGorevData, 'E');
+  const gB = safeFloat(lastGorevData, 'B');
 
   packet.set(floatToBytesLE(irtifa), 6);
   packet.set(floatToBytesLE(gpsIrtifa), 10);
@@ -208,19 +346,29 @@ function buildHYIPacket() {
   return packet;
 }
 
+// HYİ bağlantı
 document.getElementById('hyiConnectBtn').addEventListener('click', async () => {
-  hyiPort = await navigator.serial.requestPort();
-  await hyiPort.open({ baudRate: 19200 });
-  hyiWriter = hyiPort.writable.getWriter();
-  log('HYİ portuna bağlanıldı.');
-  document.getElementById('sendHYIBtn').disabled = false;
+  try {
+    hyiPort = await navigator.serial.requestPort();
+    await hyiPort.open({ baudRate: 19200 });
+    hyiWriter = hyiPort.writable.getWriter();
+    log('HYİ portuna bağlanıldı.');
+    document.getElementById('sendHYIBtn').disabled = false;
+    updateStatus(hyiStatus, true);
+  } catch (error) {
+    log('HYİ bağlantı hatası: ' + error);
+  }
 });
 
 document.getElementById('sendHYIBtn').addEventListener('click', async () => {
-  const packet = buildHYIPacket();
-  hyiSayac = (hyiSayac + 1) % 256;
-  await hyiWriter.write(packet);
-  log('HYİ paketi gönderildi!');
+  try {
+    const packet = buildHYIPacket();
+    hyiSayac = (hyiSayac + 1) % 256;
+    await hyiWriter.write(packet);
+    log('HYİ paketi gönderildi! (Sayaç: ' + (hyiSayac - 1) + ')');
+  } catch (error) {
+    log('HYİ gönderim hatası: ' + error);
+  }
 });
 </script>
 </body>
