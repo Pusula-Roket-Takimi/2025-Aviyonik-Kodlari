@@ -1,212 +1,341 @@
 const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
-const cors = require('cors');
 const path = require('path');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+const server = http.createServer(app);
+const io = socketIo(server);
 
-// Veri depolama
-let lastAviyonikData = {};
-let lastGorevData = {};
-let hyiSayac = 0;
-const takimId = 42;
+// Static dosyaları servis et
+app.use(express.static('public'));
 
-// Serial port bağlantıları
-let dataPort = null;
-let dataParser = null;
-let hyiPort = null;
-
-// API Endpoint'leri
-
-// Port listesini getir
-app.get('/api/ports', async (req, res) => {
-  try {
-    const ports = await SerialPort.list();
-    res.json(ports);
-  } catch (err) {
-    res.status(500).json({ error: 'Port listesi alınamadı', details: err.message });
-  }
+// Ana sayfa
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Veri portuna bağlan
-app.post('/api/connect', async (req, res) => {
-  try {
-    const { portPath } = req.body;
+class GroundStation {
+  constructor() {
+    this.aviyonikPort = null;
+    this.gorevPort = null;
+    this.hyiPort = null;
     
-    if (dataPort && dataPort.isOpen) {
-      await new Promise((resolve) => dataPort.close(resolve));
+    this.lastAviyonikData = {};
+    this.lastGorevData = {};
+    this.hyiSayac = 0;
+    this.takimId = 42;
+    
+    this.setupSocketEvents();
+  }
+
+  setupSocketEvents() {
+    io.on('connection', (socket) => {
+      console.log('İstemci bağlandı:', socket.id);
+      
+      // Port listesi gönder
+      this.sendPortList(socket);
+      
+      // Aviyonik bağlantı
+      socket.on('connect-aviyonik', async (portPath) => {
+        try {
+          await this.connectAviyonik(portPath);
+          socket.emit('aviyonik-connected', true);
+          this.log('Aviyonik portuna bağlanıldı: ' + portPath);
+        } catch (error) {
+          socket.emit('aviyonik-connected', false);
+          this.log('Aviyonik bağlantı hatası: ' + error.message);
+        }
+      });
+      
+      // Görev Yükü bağlantı
+      socket.on('connect-gorev', async (portPath) => {
+        try {
+          await this.connectGorev(portPath);
+          socket.emit('gorev-connected', true);
+          this.log('Görev Yükü portuna bağlanıldı: ' + portPath);
+        } catch (error) {
+          socket.emit('gorev-connected', false);
+          this.log('Görev Yükü bağlantı hatası: ' + error.message);
+        }
+      });
+      
+      // HYİ bağlantı
+      socket.on('connect-hyi', async (portPath) => {
+        try {
+          await this.connectHYI(portPath);
+          socket.emit('hyi-connected', true);
+          this.log('HYİ portuna bağlanıldı: ' + portPath);
+        } catch (error) {
+          socket.emit('hyi-connected', false);
+          this.log('HYİ bağlantı hatası: ' + error.message);
+        }
+      });
+      
+      // Bağlantı koparma
+      socket.on('disconnect-aviyonik', () => this.disconnectAviyonik());
+      socket.on('disconnect-gorev', () => this.disconnectGorev());
+      socket.on('disconnect-hyi', () => this.disconnectHYI());
+      
+      // HYİ veri gönderimi
+      socket.on('send-hyi', () => this.sendHYIData());
+      
+      // Port listesi yenile
+      socket.on('refresh-ports', () => this.sendPortList(socket));
+      
+      socket.on('disconnect', () => {
+        console.log('İstemci bağlantısı kesildi:', socket.id);
+      });
+    });
+  }
+
+  async sendPortList(socket) {
+    try {
+      const ports = await SerialPort.list();
+      const portList = ports.map(port => ({
+        path: port.path,
+        manufacturer: port.manufacturer,
+        serialNumber: port.serialNumber
+      }));
+      socket.emit('port-list', portList);
+    } catch (error) {
+      console.error('Port listesi alınamadı:', error);
+    }
+  }
+
+  async connectAviyonik(portPath) {
+    if (this.aviyonikPort && this.aviyonikPort.isOpen) {
+      this.aviyonikPort.close();
     }
     
-    dataPort = new SerialPort({ path: portPath, baudRate: 115200 });
-    
-    const parser = dataPort.pipe(new ReadlineParser({ delimiter: '\n' }));
-    parser.on('data', parseLine);
-    
-    dataPort.on('error', (err) => {
-      console.error('Data port error:', err);
+    this.aviyonikPort = new SerialPort({
+      path: portPath,
+      baudRate: 115200
     });
     
-    res.json({ success: true, message: `Port ${portPath} bağlantısı başarılı` });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// Veri portundan bağlantıyı kes
-app.post('/api/disconnect', async (req, res) => {
-  try {
-    if (dataPort) {
-      await new Promise((resolve) => dataPort.close(resolve));
-      dataPort = null;
-    }
-    res.json({ success: true, message: 'Port bağlantısı kesildi' });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// HYI portuna bağlan
-app.post('/api/hyi/connect', async (req, res) => {
-  try {
-    const { portPath } = req.body;
+    const parser = this.aviyonikPort.pipe(new ReadlineParser({ delimiter: '\n' }));
     
-    if (hyiPort && hyiPort.isOpen) {
-      await new Promise((resolve) => hyiPort.close(resolve));
-    }
-    
-    hyiPort = new SerialPort({ path: portPath, baudRate: 19200 });
-    
-    hyiPort.on('error', (err) => {
-      console.error('HYI port error:', err);
+    parser.on('data', (line) => {
+      line = line.trim();
+      if (!line) return;
+      
+      this.log('Aviyonik: ' + line);
+      this.parseAviyonikLine(line);
     });
     
-    res.json({ success: true, message: `HYI port ${portPath} bağlantısı başarılı` });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    this.aviyonikPort.on('error', (err) => {
+      this.log('Aviyonik port hatası: ' + err.message);
+      io.emit('aviyonik-connected', false);
+    });
   }
-});
 
-// HYI verisi gönder
-app.post('/api/hyi/send', async (req, res) => {
-  try {
-    if (!hyiPort || !hyiPort.isOpen) {
-      throw new Error('HYI port bağlı değil');
+  async connectGorev(portPath) {
+    if (this.gorevPort && this.gorevPort.isOpen) {
+      this.gorevPort.close();
     }
     
-    const packet = buildHYIPacket();
-    hyiSayac = (hyiSayac + 1) % 256;
-    
-    hyiPort.write(packet, (err) => {
-      if (err) throw err;
-      res.json({ success: true, message: 'HYI paketi gönderildi' });
+    this.gorevPort = new SerialPort({
+      path: portPath,
+      baudRate: 115200
     });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// Son verileri getir
-app.get('/api/aviyonik', (req, res) => {
-  res.json(lastAviyonikData);
-});
-
-app.get('/api/gorev', (req, res) => {
-  res.json(lastGorevData);
-});
-
-// Yardımcı Fonksiyonlar
-
-function parseLine(line) {
-  line = line.trim();
-  console.log('Gelen veri:', line);
-  
-  if (line.startsWith('#BOD,') && line.endsWith('#EOD')) {
-    const content = line.slice(5, -4);
-    lastAviyonikData = parseKeyValueString(content);
-  } else if (line.startsWith('#BOD_Gorev,') && line.endsWith('#EOD_Gorev')) {
-    const content = line.slice(10, -9);
-    lastGorevData = parseKeyValueString(content);
-  }
-}
-
-function parseKeyValueString(str) {
-  const obj = {};
-  const parts = str.split(',');
-  parts.forEach(part => {
-    const [key, val] = part.split('=');
-    if (key && val !== undefined) obj[key.trim()] = val.trim();
-  });
-  return obj;
-}
-
-function floatToBytesLE(floatVal) {
-  const buffer = new ArrayBuffer(4);
-  new DataView(buffer).setFloat32(0, floatVal, true);
-  return new Uint8Array(buffer);
-}
-
-function buildHYIPacket() {
-  const packet = new Uint8Array(78);
-  packet.set([0xFF, 0xFF, 0x54, 0x52], 0);
-  packet[4] = takimId;
-  packet[5] = hyiSayac;
-
-  function safeFloat(obj, key) {
-    return parseFloat(obj[key] || 0);
+    
+    const parser = this.gorevPort.pipe(new ReadlineParser({ delimiter: '\n' }));
+    
+    parser.on('data', (line) => {
+      line = line.trim();
+      if (!line) return;
+      
+      this.log('Görev Yükü: ' + line);
+      this.parseGorevLine(line);
+    });
+    
+    this.gorevPort.on('error', (err) => {
+      this.log('Görev Yükü port hatası: ' + err.message);
+      io.emit('gorev-connected', false);
+    });
   }
 
-  const irtifa = safeFloat(lastAviyonikData, 'PI');
-  const gpsIrtifa = safeFloat(lastAviyonikData, 'GI');
-  const enlem = safeFloat(lastAviyonikData, 'E');
-  const boylam = safeFloat(lastAviyonikData, 'B');
-  const gGI = safeFloat(lastGorevData, 'GI');
-  const gE = safeFloat(lastGorevData, 'E');
-  const gB = safeFloat(lastGorevData, 'B');
-  const gyroX = safeFloat(lastAviyonikData, 'GX') * Math.PI / 180;
-  const gyroY = safeFloat(lastAviyonikData, 'GY') * Math.PI / 180;
-  const gyroZ = safeFloat(lastAviyonikData, 'GZ') * Math.PI / 180;
-  const accX = safeFloat(lastAviyonikData, 'AX') * 9.80665;
-  const accY = safeFloat(lastAviyonikData, 'AY') * 9.80665;
-  const accZ = safeFloat(lastAviyonikData, 'AZ') * 9.80665;
-  const angle = safeFloat(lastAviyonikData, 'RGZ');
-  const durum = parseInt(lastAviyonikData['PD'] || 0);
+  async connectHYI(portPath) {
+    if (this.hyiPort && this.hyiPort.isOpen) {
+      this.hyiPort.close();
+    }
+    
+    this.hyiPort = new SerialPort({
+      path: portPath,
+      baudRate: 19200
+    });
+    
+    this.hyiPort.on('error', (err) => {
+      this.log('HYİ port hatası: ' + err.message);
+      io.emit('hyi-connected', false);
+    });
+  }
 
-  packet.set(floatToBytesLE(irtifa), 6);
-  packet.set(floatToBytesLE(gpsIrtifa), 10);
-  packet.set(floatToBytesLE(enlem), 14);
-  packet.set(floatToBytesLE(boylam), 18);
-  packet.set(floatToBytesLE(gGI), 22);
-  packet.set(floatToBytesLE(gE), 26);
-  packet.set(floatToBytesLE(gB), 30);
-  packet.set(floatToBytesLE(gyroX), 46);
-  packet.set(floatToBytesLE(gyroY), 50);
-  packet.set(floatToBytesLE(gyroZ), 54);
-  packet.set(floatToBytesLE(accX), 58);
-  packet.set(floatToBytesLE(accY), 62);
-  packet.set(floatToBytesLE(accZ), 66);
-  packet.set(floatToBytesLE(angle), 70);
-  packet[74] = durum;
+  disconnectAviyonik() {
+    if (this.aviyonikPort && this.aviyonikPort.isOpen) {
+      this.aviyonikPort.close();
+      this.log('Aviyonik port kapatıldı');
+      io.emit('aviyonik-connected', false);
+    }
+  }
 
-  let checksum = 0;
-  for (let i = 4; i <= 74; i++) checksum += packet[i];
-  packet[75] = checksum % 256;
-  packet[76] = 0x0D;
-  packet[77] = 0x0A;
+  disconnectGorev() {
+    if (this.gorevPort && this.gorevPort.isOpen) {
+      this.gorevPort.close();
+      this.log('Görev Yükü port kapatıldı');
+      io.emit('gorev-connected', false);
+    }
+  }
 
-  return packet;
+  disconnectHYI() {
+    if (this.hyiPort && this.hyiPort.isOpen) {
+      this.hyiPort.close();
+      this.log('HYİ port kapatıldı');
+      io.emit('hyi-connected', false);
+    }
+  }
+
+  parseAviyonikLine(line) {
+    if (line.startsWith('#BOD,') && line.endsWith('#EOD')) {
+      const content = line.slice(5, -4);
+      const parsed = this.parseKeyValueString(content);
+      this.lastAviyonikData = parsed;
+      io.emit('aviyonik-data', parsed);
+    } else {
+      this.log('Bilinmeyen aviyonik format: ' + line);
+    }
+  }
+
+  parseGorevLine(line) {
+    if (line.startsWith('#BOD_Gorev,') && line.endsWith('#EOD_Gorev')) {
+      const content = line.slice(11, -10);
+      const parsed = this.parseKeyValueString(content);
+      this.lastGorevData = parsed;
+      io.emit('gorev-data', parsed);
+    } else if (line.startsWith('#BOD,') && line.endsWith('#EOD')) {
+      const content = line.slice(5, -4);
+      const parsed = this.parseKeyValueString(content);
+      this.lastGorevData = parsed;
+      io.emit('gorev-data', parsed);
+    } else {
+      this.log('Bilinmeyen görev yükü format: ' + line);
+    }
+  }
+
+  parseKeyValueString(str) {
+    const obj = {};
+    const parts = str.split(',');
+    for (let part of parts) {
+      const [key, val] = part.split('=');
+      if (key && val !== undefined) {
+        obj[key.trim()] = val.trim();
+      }
+    }
+    return obj;
+  }
+
+  floatToBytesLE(floatVal) {
+    const buffer = Buffer.allocUnsafe(4);
+    buffer.writeFloatLE(floatVal, 0);
+    return Array.from(buffer);
+  }
+
+  buildHYIPacket() {
+    const packet = Buffer.alloc(78);
+    packet.writeUInt8(0xFF, 0);
+    packet.writeUInt8(0xFF, 1);
+    packet.writeUInt8(0x54, 2);
+    packet.writeUInt8(0x52, 3);
+    packet.writeUInt8(this.takimId, 4);
+    packet.writeUInt8(this.hyiSayac, 5);
+
+    const safeFloat = (obj, key) => parseFloat(obj[key] || 0);
+
+    // Aviyonik verilerinden
+    const irtifa = safeFloat(this.lastAviyonikData, 'PI');
+    const gpsIrtifa = safeFloat(this.lastAviyonikData, 'GI');
+    const enlem = safeFloat(this.lastAviyonikData, 'E');
+    const boylam = safeFloat(this.lastAviyonikData, 'B');
+    const gyroX = safeFloat(this.lastAviyonikData, 'GX') * Math.PI / 180;
+    const gyroY = safeFloat(this.lastAviyonikData, 'GY') * Math.PI / 180;
+    const gyroZ = safeFloat(this.lastAviyonikData, 'GZ') * Math.PI / 180;
+    const accX = safeFloat(this.lastAviyonikData, 'AX') * 9.80665;
+    const accY = safeFloat(this.lastAviyonikData, 'AY') * 9.80665;
+    const accZ = safeFloat(this.lastAviyonikData, 'AZ') * 9.80665;
+    const angle = safeFloat(this.lastAviyonikData, 'RGZ');
+    const durum = parseInt(this.lastAviyonikData['PD'] || 0);
+
+    // Görev yükü verilerinden
+    const gGI = safeFloat(this.lastGorevData, 'GI');
+    const gE = safeFloat(this.lastGorevData, 'E');
+    const gB = safeFloat(this.lastGorevData, 'B');
+
+    packet.writeFloatLE(irtifa, 6);
+    packet.writeFloatLE(gpsIrtifa, 10);
+    packet.writeFloatLE(enlem, 14);
+    packet.writeFloatLE(boylam, 18);
+    packet.writeFloatLE(gGI, 22);
+    packet.writeFloatLE(gE, 26);
+    packet.writeFloatLE(gB, 30);
+    packet.writeFloatLE(gyroX, 46);
+    packet.writeFloatLE(gyroY, 50);
+    packet.writeFloatLE(gyroZ, 54);
+    packet.writeFloatLE(accX, 58);
+    packet.writeFloatLE(accY, 62);
+    packet.writeFloatLE(accZ, 66);
+    packet.writeFloatLE(angle, 70);
+    packet.writeUInt8(durum, 74);
+
+    let checksum = 0;
+    for (let i = 4; i <= 74; i++) {
+      checksum += packet[i];
+    }
+    packet.writeUInt8(checksum % 256, 75);
+    packet.writeUInt8(0x0D, 76);
+    packet.writeUInt8(0x0A, 77);
+
+    return packet;
+  }
+
+  async sendHYIData() {
+    if (!this.hyiPort || !this.hyiPort.isOpen) {
+      this.log('HYİ portu bağlı değil!');
+      return;
+    }
+
+    try {
+      const packet = this.buildHYIPacket();
+      this.hyiSayac = (this.hyiSayac + 1) % 256;
+      
+      await new Promise((resolve, reject) => {
+        this.hyiPort.write(packet, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      
+      this.log(`HYİ paketi gönderildi! (Sayaç: ${this.hyiSayac - 1})`);
+      io.emit('hyi-sent', true);
+    } catch (error) {
+      this.log('HYİ gönderim hatası: ' + error.message);
+      io.emit('hyi-sent', false);
+    }
+  }
+
+  log(message) {
+    const timestamp = new Date().toLocaleTimeString();
+    const logMessage = `[${timestamp}] ${message}`;
+    console.log(logMessage);
+    io.emit('log', logMessage);
+  }
 }
 
-// 404 Handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint bulunamadı' });
-});
+// Yer istasyonu başlat
+const groundStation = new GroundStation();
 
-// Sunucuyu başlat
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Sunucu http://localhost:${PORT} adresinde çalışıyor`);
+server.listen(PORT, () => {
+  console.log(`Yer İstasyonu sunucusu http://localhost:${PORT} adresinde çalışıyor`);
 });
