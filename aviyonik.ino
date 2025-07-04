@@ -1,4 +1,3 @@
-
 #include <HardwareSerial.h>
 //#define TESTMODU 1
 #include <TinyGPS++.h>
@@ -46,7 +45,7 @@ HardwareSerial GpsSerial(1);
 // Class Tanımlaması
 
 //Değişken Tanımlamaları
-String p_durum = "-";
+String p_durum = "0";
 float irtifaBasinc;
 int irtifaKaybi = 0;
 int roketYatma = 0;
@@ -143,7 +142,7 @@ void Kurtarma(void* pvParameters) {
     if (irtifaKaybi && roketYatma && tetiklenmeSayisi==0) {
       digitalWrite(buzzer, HIGH);
       tetiklenmeSayisi = 1;
-      p_durum = "+";
+      p_durum = "1";
       delay(600);
 
     } else {
@@ -186,7 +185,7 @@ void Haberlesme(void* pvParameters) {
     }
     // LoRa'ya paket gönderimi
     LoraSerial.write((byte)0x00);
-    LoraSerial.write(0x15);
+    LoraSerial.write(0x16);
     LoraSerial.write(0x12);
   
    LoraSerial.print("#BOD,");
@@ -215,7 +214,7 @@ void Haberlesme(void* pvParameters) {
    LoraSerial.print(gyroX);
    LoraSerial.print(",");
 
-  LoraSerial.print("GY=");
+   LoraSerial.print("GY=");
    LoraSerial.print(gyroY);
    LoraSerial.print(",");
 
@@ -223,7 +222,7 @@ void Haberlesme(void* pvParameters) {
    LoraSerial.print(gyroZ);
    LoraSerial.print(",");
 
-  LoraSerial.print("AX=");
+   LoraSerial.print("AX=");
    LoraSerial.print(roketivme_X);
    LoraSerial.print(",");
 
