@@ -1,4 +1,3 @@
-
 #include <DHT.h>
 #include <DHT_U.h>
 #include <HardwareSerial.h>
@@ -37,7 +36,7 @@ String enlem, boylam;
 
 //Değişken Tanımlamaları
 void setup() {
-  
+  dht.begin();
   // LoRa başlatma
   LoraSerial.begin(9600, SERIAL_8N1, LoraRX, LoraTX);
   // GPS başlatma
