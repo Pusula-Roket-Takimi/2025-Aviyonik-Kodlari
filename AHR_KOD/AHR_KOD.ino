@@ -475,6 +475,18 @@ void Haberlesme(void* pvParameters) {
     LoraSerial.print("PD=");
     LoraSerial.print(p_durum);
     LoraSerial.print(",");
+    
+    LoraSerial.print("RGX=");
+    LoraSerial.print(0);
+    LoraSerial.print(",");
+
+    LoraSerial.print("RGY=");
+    LoraSerial.print(0);
+    LoraSerial.print(",");
+
+    LoraSerial.print("RGZ=");
+    LoraSerial.print(0);
+    LoraSerial.print(",");
 
     // FOOTER
     LoraSerial.println("#EOD");
