@@ -1,6 +1,5 @@
-
-
 //#define TESTMODU 1
+
 #define LoraRX D0
 #define LoraTX D1
 #define GpsRX D8
@@ -8,10 +7,11 @@
 #define buzzer D4
 #define PATLAMAK D12
 
-
+#define ALICI_ADRES
+#define ALICI_KANAL 
 #define PATLAMA_SURESI 1100
-#define LORA_INTERVAL 1500;
-#define SIT_INTERVAL = 100;
+#define LORA_INTERVAL 1500
+#define SIT_INTERVAL 100
 
 
 // Paket tanımı
@@ -39,31 +39,91 @@ TaskHandle_t Task2;
 TaskHandle_t Task3;
 
 
-// Kalman filtresi değişkenleri
-float Q_Basinc = 0.001;     // Daha az sistem gürültüsü
-float R_Basinc = 0.1;       // Ölçüme daha çok güven (daha düşük)
-float P_Basinc = 1.0;       // Başlangıç belirsizliği
-float Basinc_Kalman = 0.0;  // İlk tahmin
-float K_Basinc = 0.0;       // Kalman kazancı
+  //////////////////////////////////////////////////////
+ ///////////////////////KALMAN/////////////////////////
+//////////////////////////////////////////////////////
 
-float Q_Z_Ivme = 0.001;     // Daha az sistem gürültüsü
-float R_Z_Ivme = 0.1;       // Ölçüme daha çok güven (daha düşük)
-float P_Z_Ivme = 1.0;       // Başlangıç belirsizliği
-float Z_Ivme_Kalman = 0.0;  // İlk tahmin
-float K_Z_Ivme = 0.0;       // Kalman kazancı
+// Basınç
+float Q_Basinc = 0.001;
+float R_Basinc = 0.1;
+float P_Basinc = 1.0;
+float Basinc_Kalman = 0.0;
+float K_Basinc = 0.0;
 
-float Q_X_Ivme = 0.001;     // Daha az sistem gürültüsü
-float R_X_Ivme = 0.1;       // Ölçüme daha çok güven (daha düşük)
-float P_X_Ivme = 1.0;       // Başlangıç belirsizliği
-float X_Ivme_Kalman = 0.0;  // İlk tahmin
-float K_X_Ivme = 0.0;       // Kalman kazancı
+// İvme X
+float Q_X_Ivme = 0.001;
+float R_X_Ivme = 0.1;
+float P_X_Ivme = 1.0;
+float X_Ivme_Kalman = 0.0;
+float K_X_Ivme = 0.0;
 
-float Q_Y_Ivme = 0.001;     // Daha az sistem gürültüsü
-float R_Y_Ivme = 0.1;       // Ölçüme daha çok güven (daha düşük)
-float P_Y_Ivme = 1.0;       // Başlangıç belirsizliği
-float Y_Ivme_Kalman = 0.0;  // İlk tahmin
-float K_Y_Ivme = 0.0;       // Kalman kazancı
-// Kalman filtresi değişkenleri
+// İvme Y
+float Q_Y_Ivme = 0.001;
+float R_Y_Ivme = 0.1;
+float P_Y_Ivme = 1.0;
+float Y_Ivme_Kalman = 0.0;
+float K_Y_Ivme = 0.0;
+
+// İvme Z
+float Q_Z_Ivme = 0.001;
+float R_Z_Ivme = 0.1;
+float P_Z_Ivme = 1.0;
+float Z_Ivme_Kalman = 0.0;
+float K_Z_Ivme = 0.0;
+
+
+enum {
+  SENSOR_BASINC = 0,
+  SENSOR_IVME_Z = 1,
+  SENSOR_IVME_X = 2,
+  SENSOR_IVME_Y = 3
+};
+
+float kalmanla(float olcum, int sensorID) {
+  switch (sensorID) {
+    case SENSOR_BASINC:
+      P_Basinc += Q_Basinc;
+      K_Basinc = P_Basinc / (P_Basinc + R_Basinc);
+      Basinc_Kalman += K_Basinc * (olcum - Basinc_Kalman);
+      P_Basinc *= (1.0f - K_Basinc);
+      return Basinc_Kalman;
+
+    case SENSOR_IVME_Z:
+      P_Z_Ivme += Q_Z_Ivme;
+      K_Z_Ivme = P_Z_Ivme / (P_Z_Ivme + R_Z_Ivme);
+      Z_Ivme_Kalman += K_Z_Ivme * (olcum - Z_Ivme_Kalman);
+      P_Z_Ivme *= (1.0f - K_Z_Ivme);
+      return Z_Ivme_Kalman;
+
+    case SENSOR_IVME_X:
+      P_X_Ivme += Q_X_Ivme;
+      K_X_Ivme = P_X_Ivme / (P_X_Ivme + R_X_Ivme);
+      X_Ivme_Kalman += K_X_Ivme * (olcum - X_Ivme_Kalman);
+      P_X_Ivme *= (1.0f - K_X_Ivme);
+      return X_Ivme_Kalman;
+
+    case SENSOR_IVME_Y:
+      P_Y_Ivme += Q_Y_Ivme;
+      K_Y_Ivme = P_Y_Ivme / (P_Y_Ivme + R_Y_Ivme);
+      Y_Ivme_Kalman += K_Y_Ivme * (olcum - Y_Ivme_Kalman);
+      P_Y_Ivme *= (1.0f - K_Y_Ivme);
+      return Y_Ivme_Kalman;
+
+    default:
+      return 0.0f;  // Geçersiz sensör ID
+  }
+}
+
+
+
+
+
+  //////////////////////////////////////////////////////
+ ///////////////////////KALMAN/////////////////////////
+//////////////////////////////////////////////////////
+
+
+
 
 
 
@@ -82,10 +142,7 @@ HardwareSerial LoraSerial(2);
 bool p_durum;
 
 // BMP
-float BMP_irtifa;
-double SEA_LEVEL;
-
-
+float BMP_irtifa, SEA_LEVEL;
 
 // IMU
 float gyroX, gyroY, gyroZ;
@@ -120,7 +177,7 @@ void setup() {
 
 
   // MAX3232
-  Serial.begin(9600);
+  Serial.begin(9600);  // 192500
 
 
 
@@ -186,21 +243,20 @@ void setup() {
 void sentetikUcusTesti(void* pvParameters) {
   for (;;) {
     byte packetSit[36];
-    packetSit
-    int index = 0;
+    packetSit int index = 0;
 
     // Başlık
     packet[index++] = 0xAB;
 
 
-    float floats[8] = { BMP_irtifa, 
-    Basinc_Kalman, 
-    X_Ivme_Kalman, 
-    Y_Ivme_Kalman, 
-    Z_Ivme_Kalman, 
-    gyroX, 
-    gyroY, 
-    gyroZ };
+    float floats[8] = { BMP_irtifa,
+                        Basinc_Kalman,
+                        X_Ivme_Kalman,
+                        Y_Ivme_Kalman,
+                        Z_Ivme_Kalman,
+                        gyroX,
+                        gyroY,
+                        gyroZ };
 
 
     for (int i = 0; i < 8; i++) {
@@ -210,14 +266,13 @@ void sentetikUcusTesti(void* pvParameters) {
       }
     }
 
-    packetSit[index++] = 0;  // checksum
-    packetSit[index++] = 0x0D;// 35
-    packetSit[index++] = 0x0A;// 36
+    packetSit[index++] = 0;     // checksum
+    packetSit[index++] = 0x0D;  // 35
+    packetSit[index++] = 0x0A;  // 36
 
     Serial.print(packetSit);
 
-    vTaskDelay(SIT_INTERVAL / portTICK_PERIOD_MS); // 10 hazret
-
+    vTaskDelay(SIT_INTERVAL / portTICK_PERIOD_MS);  // 10 hazret
   }
 }
 
@@ -267,14 +322,14 @@ void UKBTEST(void* pvParameters) {
     switch (cmd) {
       case CMD_SIT_START:
         delay(1000);
-         xTaskCreatePinnedToCore(
-    ANA_ALGORITMA, /* Task function. */
-    "Task1",       /* name of task. */
-    10000,         /* Stack size of task */
-    NULL,          /* parameter of the task */
-    1,             /* priority of the task */
-    &Task1,        /* Task handle to keep track of created task */
-    0);            /* pin task to core 0 */
+        xTaskCreatePinnedToCore(
+          ANA_ALGORITMA, /* Task function. */
+          "Task1",       /* name of task. */
+          10000,         /* Stack size of task */
+          NULL,          /* parameter of the task */
+          1,             /* priority of the task */
+          &Task1,        /* Task handle to keep track of created task */
+          0);            /* pin task to core 0 */
         sensorIzlemeTesti();
         break;
 
@@ -305,16 +360,43 @@ void UKBTEST(void* pvParameters) {
 
 
 
+struct SAF_VERI {
+  float P;
+  float AX, AY, AZ;
+  float GX, GY, GZ;
+};
+
+
+  float AX, AY, AZ, GX, GY, GZ, P, PI;
 
 
 
+void SafVeriOku() {
+
+
+
+  P = BMP.readAltitude();  // degistir
+  PI = BMP.readAltitude(SEA_LEVEL);
+
+
+
+  AX = IMU.readFloatAccelX();
+  AY = IMU.readFloatAccelY();
+  AZ = IMU.readFloatAccelZ();
+
+  GX = IMU.readFloatGyroX();
+  GY = IMU.readFloatGyroX();
+  GZ = IMU.readFloatGyroX();
+
+  // ANA_ALGORITMA();// or return
+}
 
 
 unsigned long patlama_millis;
 
-void ANA_ALGORITMA(void* pvParameters,) {
+
+void ANA_ALGORITMA(float P, float AX, float AY, float AZ, float GX, float GY, float GZ) {
   for (;;) {
-    float basinc = BMP.readPressure();
 
     //Basınç Kalman
     P_Basinc = P_Basinc + Q_Basinc;
@@ -324,14 +406,14 @@ void ANA_ALGORITMA(void* pvParameters,) {
     //Basınç Kalman
 
 
+    float roketivme_X, roketivme_Y, roketivme_Z;
 
     // X ve Znin yerleri değiştirilmiştir///////////////////////
-    float roketivme_X, roketivme_Y, roketivme_Z;
-    roketivme_Z = abs(IMU.readFloatAccelX()) * 100;
-    roketivme_Y = abs(IMU.readFloatAccelY()) * 100;
-    roketivme_X = abs(IMU.readFloatAccelZ()) * 100;
+    roketivme_Z = abs(AX) * 100;
+    roketivme_Y = abs(AY) * 100;
+    roketivme_X = abs(AZ) * 100;
 
-    gyroZ = abs(IMU.readFloatGyroX()) * 100;
+
     gyroY = abs(IMU.readFloatGyroY()) * 100;
     gyroX = abs(IMU.readFloatGyroZ()) * 100;
 
