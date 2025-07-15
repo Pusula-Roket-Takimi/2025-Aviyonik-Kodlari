@@ -1,7 +1,6 @@
 #include <DHT.h>
 #include <DHT_U.h>
 #include <HardwareSerial.h>
-#include <Arduino.h>
 #include <TinyGPS++.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
@@ -183,7 +182,7 @@ void Haberlesme(void* pvParameters) {
 
    LoraSerial.println("#EOD_Gorev");
     
-  delay(1800);
+  delay(500);
 
   }
 }
