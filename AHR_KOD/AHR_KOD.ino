@@ -1,46 +1,33 @@
-//#define TESTMODU 1
+#define TESTMODU 1
+static bool aktif = true;   
+static bool pasif = false;  
 
-#define LoraRX D0
-#define LoraTX D1
-#define GpsRX D8
-#define GpsTX D9
-#define buzzer D4
+#define LoraTX D9
+#define GpsRX D13
+#define BUZZER D4
 #define PATLAMAK D12
 
-#define ALICI_ADRES
-#define ALICI_KANAL 
+#define ALICI_ADRES 31
+#define ALICI_KANAL 50
+
 #define PATLAMA_SURESI 1100
-#define LORA_INTERVAL 1500
+#define LORA_INTERVAL 900
 #define SIT_INTERVAL 100
 
-
-// Paket tanımı
-const uint8_t HEADER = 0xAA;
-const uint8_t FOOTER1 = 0x0D;
-const uint8_t FOOTER2 = 0x0A;
-
-// Command Bloğu
-const uint8_t CMD_SIT_START = 0x20;  // Sit
-const uint8_t CMD_SUT_START = 0x22;  // Sut
-const uint8_t CMD_STOP = 0x24;       // Durdur
-
-
+#define SEALEVELPRESSURE_HPA (991)
 
 
 #include <HardwareSerial.h>
 #include <TinyGPS++.h>
-#include <Adafruit_Sensor.h>
+//#include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
 #include <lsm6dsm.h>
 #include <deneyap.h>
 
-TaskHandle_t Task1;
-TaskHandle_t Task2;
-TaskHandle_t Task3;
 
 
-  //////////////////////////////////////////////////////
- ///////////////////////KALMAN/////////////////////////
+//////////////////////////////////////////////////////
+///////////////////////KALMAN/////////////////////////
 //////////////////////////////////////////////////////
 
 // Basınç
@@ -73,10 +60,10 @@ float K_Z_Ivme = 0.0;
 
 
 enum {
-  SENSOR_BASINC = 0,
-  SENSOR_IVME_Z = 1,
-  SENSOR_IVME_X = 2,
-  SENSOR_IVME_Y = 3
+  SENSOR_BASINC,
+  SENSOR_IVME_Z,
+  SENSOR_IVME_X,
+  SENSOR_IVME_Y
 };
 
 float kalmanla(float olcum, int sensorID) {
@@ -118,8 +105,8 @@ float kalmanla(float olcum, int sensorID) {
 
 
 
-  //////////////////////////////////////////////////////
- ///////////////////////KALMAN/////////////////////////
+//////////////////////////////////////////////////////
+///////////////////////KALMAN/////////////////////////
 //////////////////////////////////////////////////////
 
 
@@ -131,26 +118,26 @@ float kalmanla(float olcum, int sensorID) {
 Adafruit_BMP280 BMP;
 LSM6DSM IMU;
 TinyGPSPlus GPS;
-
-HardwareSerial GpsSerial(1);
 HardwareSerial LoraSerial(2);
 // Class Tanımlaması
 
 
 
-//Değişken Tanımlamaları
-bool p_durum;
 
-// BMP
-float BMP_irtifa, SEA_LEVEL;
 
-// IMU
-float gyroX, gyroY, gyroZ;
+
+
+// GLOBAL Değişken Tanımlamaları
+
+// RAW VERI SETI
+float AX, AY, AZ, GX, GY, GZ, P, Pi;
+bool p_durum = false;
 
 // GPS
-String enlem, boylam;
-double gps_irtifa;
-//Değişken Tanımlamaları
+float enlem, boylam, gps_irtifa;
+
+
+// GLOBAL Değişken Tanımlamaları
 
 
 
@@ -163,100 +150,227 @@ double gps_irtifa;
 
 
 
-
-
-
-
+TaskHandle_t MAX3232_Handle;     // ALWAYS ON TASK
+TaskHandle_t Haberlesme_Handle;  // Y
+TaskHandle_t NORMAL_MOD_Handle;  // X
+TaskHandle_t SIT_MOD_Handle;     // X
+TaskHandle_t SUT_MOD_Handle;     // X
 
 
 void setup() {
-  pinMode(buzzer, OUTPUT);
+  pinMode(BUZZER, OUTPUT);
   pinMode(PATLAMAK, OUTPUT);
 
-  digitalWrite(buzzer, HIGH);
-
+  digitalWrite(BUZZER, HIGH);
 
   // MAX3232
-  Serial.begin(9600);  // 192500
+  Serial.begin(115200);  // 192500
 
+  // LoRa ve GPS birlikte başlatma
+  LoraSerial.begin(9600, SERIAL_8N1, GpsRX, LoraTX);
 
-
-  // LoRa başlatma
-  LoraSerial.begin(9600, SERIAL_8N1, LoraRX, LoraTX);
-  // GPS başlatma
-  GpsSerial.begin(9600, SERIAL_8N1, GpsRX, GpsTX);
   // BMP başlatma
-  BMP.begin(0x76);  // veya 77 denenecek
-  SEA_LEVEL = BMP.readPressure();
+  BMP.begin(0x76);
 
-  // ATALETSEL OLCU BIRIMI BASLATMA
+  // IMU başlatma
   IMU.begin();
 
+  //  xTaskCreatePinnedToCore(
+  //  KURTARMA, Task function.
+  //  "Task2",    name of task.
+  //  10000,      Stack size of task
+  //  NULL,       parameter of the task
+  //  1,          priority of the task
+  //  &Task2,     Task handle to keep track of created task
+  //  1);         pin task to core 1
 
 
+  MOD_SHIFT(false);
+  delay(200);
+  /*
+  // ÇEKİRDEK 1
   xTaskCreatePinnedToCore(
-    Haberlesme, /* Task function. */
-    "Task2",    /* name of task. */
-    10000,      /* Stack size of task */
-    NULL,       /* parameter of the task */
-    1,          /* priority of the task */
-    &Task2,     /* Task handle to keep track of created task */
-    1);         /* pin task to core 1 */
+    MAX3232_LISTEN,
+    "MAX3232_LISTEN",
+    10000,
+    NULL,
+    1,
+    &MAX3232_Handle,
+    1);
 
-
-  delay(500);
-
-  xTaskCreatePinnedToCore(
-    ANA_ALGORITMA, /* Task function. */
-    "Task1",       /* name of task. */
-    10000,         /* Stack size of task */
-    NULL,          /* parameter of the task */
-    1,             /* priority of the task */
-    &Task1,        /* Task handle to keep track of created task */
-    0);            /* pin task to core 0 */
-
-  delay(500);
-
-  xTaskCreatePinnedToCore(
-    UKBTEST,   /* Task function. */
-    "UKBTEST", /* name of task. */
-    10000,     /* Stack size of task */
-    NULL,      /* parameter of the task */
-    1,         /* priority of the task */
-    &Task3,    /* Task handle to keep track of created task */
-    0);        /* pin task to core 1 */
-
-
-
-
+*/
   delay(2000);
-  digitalWrite(buzzer, LOW);
+  digitalWrite(BUZZER, LOW);
 }
 
-// ALGORITMADA
-// SENSOR VERİLERİ VE KURTARMA FARKLI FONK OLACAK. BU KADAR
+
+enum MOD {
+  NORMAL_MOD,
+  SUT_MOD,
+  SIT_MOD
+};
+
+MOD roket_mod = NORMAL_MOD;
+
+void MOD_SHIFT(bool kill) {
+#ifdef TESTMODU
+  Serial.print("MOD SHIFT  ");
+  Serial.println(roket_mod);
+  Serial.println(BMP.readTemperature());
+
+#endif
+  if (kill) {
+    vTaskDelete(Haberlesme_Handle);
+    Haberlesme_Handle = NULL;
+    vTaskDelete(NORMAL_MOD_Handle);
+    NORMAL_MOD_Handle = NULL;
+    vTaskDelete(SIT_MOD_Handle);
+    SIT_MOD_Handle = NULL;
+    vTaskDelete(SUT_MOD_Handle);
+    SUT_MOD_Handle = NULL;
+  }
+
+
+  // EN İYİ ÇEKİRDEKLERİ TERCIH ET
+  if (roket_mod == NORMAL_MOD) {
+    xTaskCreatePinnedToCore(
+      NormalAlgoritma,
+      "X_NORMAL_MOD",
+      10000,
+      &aktif,
+      1,
+      &NORMAL_MOD_Handle,
+      1);
+    delay(200);
+    xTaskCreatePinnedToCore(
+      Haberlesme,
+      "Y_HABERLESME",
+      10000,
+      NULL,
+      1,
+      &Haberlesme_Handle,
+      0);
+  } else if (roket_mod == SIT_MOD) {
+    xTaskCreatePinnedToCore(
+      NormalAlgoritma,
+      "X_NORMAL_MOD",
+      10000,
+      &aktif,
+      1,
+      &NORMAL_MOD_Handle,
+      1);
+
+    xTaskCreatePinnedToCore(
+      SITAlgoritma,
+      "SIT_MOD",
+      10000,
+      NULL,
+      1,
+      &SIT_MOD_Handle,
+      0);
+
+  } else if (roket_mod == SUT_MOD) {
+    //  NormalAlgoritma(false)
+  }
+}
 
 
 
 
+// Paket tanımı
+const uint8_t HEADER = 0xAA;
+const uint8_t FOOTER1 = 0x0D;
+const uint8_t FOOTER2 = 0x0A;
 
-void sentetikUcusTesti(void* pvParameters) {
+// Command Bloğu
+const uint8_t CMD_SIT_START = 0x20;  // Sit
+const uint8_t CMD_SUT_START = 0x22;  // Sut
+const uint8_t CMD_STOP = 0x24;       // Durdur
+
+
+void MAX3232_LISTEN(void* pvParameters) {
+  if (Serial.available()) {
+    if (Serial.peek() != HEADER) {
+      Serial.read();
+      return;
+    }
+
+    uint8_t buf[5];                      // [HEADER, CMD, CHECKSUM, F1, F2]
+    if (Serial.available() < 5) return;  // tam gelmemiş sg
+    for (int i = 0; i < 5; i++) {
+      buf[i] = Serial.read();
+    }
+
+    //3) Basit footer kontrolü
+    if (buf[3] != FOOTER1 || buf[4] != FOOTER2) {
+      Serial.println(F("Footer hatalı, atlanıyor."));
+      return;
+    }
+
+    uint8_t cmd = buf[1];
+    uint8_t receivedCk = buf[2];
+
+    // 4) Yenilenmiş Checksum doğrulama:
+    //    Önce header ve command toplanır, sonra 0xFF ile mod alınır
+    uint8_t calcCk = (uint8_t)(((uint16_t)HEADER + cmd) % 0xFF);
+
+    if (calcCk != receivedCk) {
+      // Serial.print(F("Checksum hatası! Hesaplanan=0x"));  // WOW
+      // Serial.print(calcCk, HEX);
+      // Serial.print(F("  Gelen=0x"));
+      // Serial.println(receivedCk, HEX);
+      return;
+    }
+
+    // IF MOD FARKLI O HALDE MOD FARKLI İSE START-A-FUNCTION
+    // 5) Komuta göre fonksiyon çağır
+    MOD yeni_mod_talebi;
+    switch (cmd) {
+      case CMD_SIT_START:
+        yeni_mod_talebi = SIT_MOD;
+        break;
+
+      case CMD_SUT_START:
+        yeni_mod_talebi = SUT_MOD;
+        break;
+
+      case CMD_STOP:
+        yeni_mod_talebi = NORMAL_MOD;
+        break;
+
+      default:
+
+        break;
+    }
+
+
+    if (yeni_mod_talebi != roket_mod) {
+      MOD_SHIFT(true);
+    }  // else WOW
+  }
+}
+
+
+void SITAlgoritma(void* pvParameters) {
+  // NORMAL ALGORİTMA + AŞAĞISI
+
   for (;;) {
+
     byte packetSit[36];
-    packetSit int index = 0;
+    int index = 0;  // packetSit
 
     // Başlık
-    packet[index++] = 0xAB;
+    packetSit[index++] = 0xAB;
 
 
-    float floats[8] = { BMP_irtifa,
+    float floats[8] = { Pi,
                         Basinc_Kalman,
                         X_Ivme_Kalman,
                         Y_Ivme_Kalman,
                         Z_Ivme_Kalman,
-                        gyroX,
-                        gyroY,
-                        gyroZ };
+                        GX,
+                        GY,
+                        GZ };
 
 
     for (int i = 0; i < 8; i++) {
@@ -270,205 +384,98 @@ void sentetikUcusTesti(void* pvParameters) {
     packetSit[index++] = 0x0D;  // 35
     packetSit[index++] = 0x0A;  // 36
 
-    Serial.print(packetSit);
+    // Serial.print(packetSit);
 
     vTaskDelay(SIT_INTERVAL / portTICK_PERIOD_MS);  // 10 hazret
   }
 }
 
-
-
-
-
-
-
-void UKBTEST(void* pvParameters) {
-
-  if (Serial.available()) {
-    if (Serial.peek() != HEADER) {
-      Serial.read();
-      return;
-    }
-
-    uint8_t buf[5];                      // [HEADER, CMD, CHECKSUM, F1, F2]
-    if (Serial.available() < 5) return;  // tam gelmemiş
-    for (int i = 0; i < 5; i++) {
-      buf[i] = Serial.read();
-    }
-
-    // 3) Basit footer kontrolü
-    //  if (buf[3] != FOOTER1 || buf[4] != FOOTER2) {
-    //   Serial.println(F("Footer hatalı, atlanıyor."));
-    //  return;
-    // }
-
-    uint8_t cmd = buf[1];
-    uint8_t receivedCk = buf[2];
-
-    // 4) Yenilenmiş Checksum doğrulama:
-    //    Önce header ve command toplanır, sonra 0xFF ile mod alınır
-    uint8_t calcCk = (uint8_t)(((uint16_t)HEADER + cmd) % 0xFF);
-
-    if (calcCk != receivedCk) {
-      Serial.print(F("Checksum hatası! Hesaplanan=0x"));
-      Serial.print(calcCk, HEX);
-      Serial.print(F("  Gelen=0x"));
-      Serial.println(receivedCk, HEX);
-      return;
-    }
-
-
-    // 5) Komuta göre fonksiyon çağır
-    switch (cmd) {
-      case CMD_SIT_START:
-        delay(1000);
-        xTaskCreatePinnedToCore(
-          ANA_ALGORITMA, /* Task function. */
-          "Task1",       /* name of task. */
-          10000,         /* Stack size of task */
-          NULL,          /* parameter of the task */
-          1,             /* priority of the task */
-          &Task1,        /* Task handle to keep track of created task */
-          0);            /* pin task to core 0 */
-        sensorIzlemeTesti();
-        break;
-
-      case CMD_SUT_START:
-        delay(1000);
-        sentetikUcusTesti();
-        break;
-
-      case CMD_STOP:
-        durdur();
-        break;
-
-      default:
-
-        break;
-    }
+void SUTAlgoritma(void* pvParameters) {
+  for (;;) {
+    KALMAN_KUR();
+    KURTARMA();
   }
-  //////////////////////////////////////////////////////////////////////// max3232 dinleme              loop son
+}
+
+
+void NormalAlgoritma(void* pvParameters) {
+#ifdef TESTMODU
+  Serial.print("ALGORITM running on core ");
+  Serial.println(xPortGetCoreID());
+#endif
+
+  bool RAW = *((bool*)pvParameters);  // void* → bool*
+
+  for (;;) {
+    if (RAW)
+      SensorVeriOku();
+
+    KALMAN_KUR();
+    KURTARMA();
+
+    vTaskDelay(pdMS_TO_TICKS(1));  // TODO: Yield
+  }
 }
 
 
 
+void SensorVeriOku() {
+  P = BMP.readPressure();
+  Pi = BMP.readAltitude(SEALEVELPRESSURE_HPA);
+  // X ve Znin yerleri değiştirilmiştir
 
-
-
-
-
-
-
-
-struct SAF_VERI {
-  float P;
-  float AX, AY, AZ;
-  float GX, GY, GZ;
-};
-
-
-  float AX, AY, AZ, GX, GY, GZ, P, PI;
-
-
-
-void SafVeriOku() {
-
-
-
-  P = BMP.readAltitude();  // degistir
-  PI = BMP.readAltitude(SEA_LEVEL);
-
-
-
-  AX = IMU.readFloatAccelX();
+  AX = IMU.readFloatAccelZ();
   AY = IMU.readFloatAccelY();
-  AZ = IMU.readFloatAccelZ();
+  AZ = IMU.readFloatAccelX();
 
-  GX = IMU.readFloatGyroX();
-  GY = IMU.readFloatGyroX();
+  GX = IMU.readFloatGyroZ();
+  GY = IMU.readFloatGyroY();
   GZ = IMU.readFloatGyroX();
-
-  // ANA_ALGORITMA();// or return
 }
 
+void KALMAN_KUR() {
+  kalmanla(AX, SENSOR_IVME_X);
+  kalmanla(AY, SENSOR_IVME_Y);
+  kalmanla(AZ, SENSOR_IVME_Z);
+  kalmanla(P, SENSOR_BASINC);
+}
 
-unsigned long patlama_millis;
+unsigned long patlama_millis, basinc_millis;
+float eski_basinc;
 
+void KURTARMA() {
+  bool irtifaKaybi = false, roketYatma = false;
 
-void ANA_ALGORITMA(float P, float AX, float AY, float AZ, float GX, float GY, float GZ) {
-  for (;;) {
+  float yeni_basinc = Basinc_Kalman;
 
-    //Basınç Kalman
-    P_Basinc = P_Basinc + Q_Basinc;
-    K_Basinc = P_Basinc / (P_Basinc + R_Basinc);
-    Basinc_Kalman = Basinc_Kalman + K_Basinc * (basinc - Basinc_Kalman);
-    P_Basinc = (1 - K_Basinc) * P_Basinc;
-    //Basınç Kalman
+  if (yeni_basinc > eski_basinc+50)
+    irtifaKaybi = true;
 
+  unsigned long new_millis = millis();
 
-    float roketivme_X, roketivme_Y, roketivme_Z;
-
-    // X ve Znin yerleri değiştirilmiştir///////////////////////
-    roketivme_Z = abs(AX) * 100;
-    roketivme_Y = abs(AY) * 100;
-    roketivme_X = abs(AZ) * 100;
-
-
-    gyroY = abs(IMU.readFloatGyroY()) * 100;
-    gyroX = abs(IMU.readFloatGyroZ()) * 100;
-
-    /////////////////////////////////////////////////////////////
+  if (new_millis - basinc_millis >= 100) {
+    basinc_millis = new_millis;
+    eski_basinc = yeni_basinc;
+  }
 
 
-    //İvme_X Kalman
-    P_X_Ivme = P_X_Ivme + Q_X_Ivme;
-    K_X_Ivme = P_X_Ivme / (P_X_Ivme + R_X_Ivme);
-    X_Ivme_Kalman = X_Ivme_Kalman + K_X_Ivme * (roketivme_X - X_Ivme_Kalman);
-    P_X_Ivme = (1 - K_X_Ivme) * P_X_Ivme;
-    //İvme_X Kalman
+  float roketivme_X = abs(X_Ivme_Kalman) * 100;
+  float roketivme_Y = abs(Y_Ivme_Kalman) * 100;
 
-    //İvme_Y Kalman
-    P_Y_Ivme = P_Y_Ivme + Q_Y_Ivme;
-    K_Y_Ivme = P_Y_Ivme / (P_Y_Ivme + R_Y_Ivme);
-    Y_Ivme_Kalman = Y_Ivme_Kalman + K_Y_Ivme * (roketivme_Y - Y_Ivme_Kalman);
-    P_Y_Ivme = (1 - K_Y_Ivme) * P_Y_Ivme;
-    //İvme_Y Kalman
+  if (roketivme_X > 75 || roketivme_Y > 75)
+    roketYatma = true;
 
-    //İvme Z Kalman
-    P_Z_Ivme = P_Z_Ivme + Q_Z_Ivme;
-    K_Z_Ivme = P_Z_Ivme / (P_Z_Ivme + R_Z_Ivme);
-    Z_Ivme_Kalman = Z_Ivme_Kalman + K_Z_Ivme * (roketivme_Z - Z_Ivme_Kalman);
-    P_Z_Ivme = (1 - K_Z_Ivme) * P_Z_Ivme;
-    //İvme Z Kalman
+  bool kosul = (irtifaKaybi && roketYatma);
+
+  if (kosul && !p_durum) {
+    p_durum = true;
+    digitalWrite(PATLAMAK, HIGH);
+  }
 
 
-
-
-
-    float new_irtifa = BMP.readAltitude(SEA_LEVEL);
-    bool irtifaKaybi, roketYatma;
-
-    if (new_irtifa < BMP_irtifa)
-      irtifaKaybi = true;
-
-    BMP_irtifa = new_irtifa;
-
-    if (X_Ivme_Kalman > 75 || Y_Ivme_Kalman > 75)
-      roketYatma = true;
-
-    bool kosul = (irtifaKaybi && roketYatma);
-
-    if (kosul && !p_durum) {
-      p_durum = true;
-      digitalWrite(PATLAMAK, HIGH);
-    }
-
-    unsigned long new_millis = millis();
-
-    if (new_millis - patlama_millis >= PATLAMA_SURESI) {
-      patlama_millis = new_millis;
-      digitalWrite(PATLAMAK, LOW);
-    }
+  if (new_millis - patlama_millis >= PATLAMA_SURESI) {
+    patlama_millis = new_millis;
+    digitalWrite(PATLAMAK, LOW);
   }
 }
 
@@ -480,30 +487,33 @@ void ANA_ALGORITMA(float P, float AX, float AY, float AZ, float GX, float GY, fl
 
 
 
-
+// TODO: better packing
 void Haberlesme(void* pvParameters) {
+#ifdef TESTMODU
+  Serial.print("Haberlesme running on core ");
+  Serial.println(xPortGetCoreID());
+#endif
   for (;;) {
 
-    if (GpsSerial.available()) {
-      if (GPS.encode(GpsSerial.read())) {
-        if (GPS.location.isValid() && GPS.altitude.isValid()) {
-          enlem = String(GPS.location.lat(), 6);
-          boylam = String(GPS.location.lng(), 6);
+    // ASYNC
+    while (LoraSerial.available())
+      GPS.encode(LoraSerial.read());
 
 
-          gps_irtifa = GPS.altitude.meters();
-        }
-      }
-    } else {
-      enlem = "0.000000";
-      boylam = "0.000000";
-      gps_irtifa = 00.0;
+    if (GPS.location.isValid()) {
+      enlem = GPS.location.lat();
+      boylam = GPS.location.lng();
     }
+
+    if (GPS.altitude.isValid()) {
+      gps_irtifa = GPS.altitude.meters();
+    }
+
 
     // HEADERLER
     LoraSerial.write((byte)0x00);
-    LoraSerial.write(0x16);  // adres 22=16 - 21=15 - 23=17
-    LoraSerial.write(0x12);  // kanal 18 için
+    LoraSerial.write(ALICI_ADRES);
+    LoraSerial.write(ALICI_KANAL);
     LoraSerial.print("#BOD,");
 
 
@@ -526,20 +536,20 @@ void Haberlesme(void* pvParameters) {
     LoraSerial.print(",");
 
     LoraSerial.print("PI=");
-    LoraSerial.print(BMP_irtifa);
+    LoraSerial.print(Pi);
     LoraSerial.print(",");
 
     // IMU
     LoraSerial.print("GX=");
-    LoraSerial.print(gyroX);
+    LoraSerial.print(GX);
     LoraSerial.print(",");
 
     LoraSerial.print("GY=");
-    LoraSerial.print(gyroY);
+    LoraSerial.print(GY);
     LoraSerial.print(",");
 
     LoraSerial.print("GZ=");
-    LoraSerial.print(gyroZ);
+    LoraSerial.print(GZ);
     LoraSerial.print(",");
 
     LoraSerial.print("AX=");
@@ -556,18 +566,6 @@ void Haberlesme(void* pvParameters) {
 
     LoraSerial.print("PD=");
     LoraSerial.print(p_durum);
-    LoraSerial.print(",");
-    
-    LoraSerial.print("RGX=");
-    LoraSerial.print(0);
-    LoraSerial.print(",");
-
-    LoraSerial.print("RGY=");
-    LoraSerial.print(0);
-    LoraSerial.print(",");
-
-    LoraSerial.print("RGZ=");
-    LoraSerial.print(0);
     LoraSerial.print(",");
 
     // FOOTER
