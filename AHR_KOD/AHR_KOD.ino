@@ -1,6 +1,11 @@
-#define TESTMODU 1
-static bool aktif = true;   
-static bool pasif = false;  
+//#define TESTMODU 1
+
+
+
+
+
+static bool aktif = true;
+static bool pasif = false;
 
 #define LoraTX D9
 #define GpsRX D13
@@ -15,6 +20,13 @@ static bool pasif = false;
 #define SIT_INTERVAL 100
 
 #define SEALEVELPRESSURE_HPA (991)
+
+const uint8_t X_BOOTLOADER[] = {
+  0x4D, 0x45, 0x48, 0x4D, 0x45, 0x54, 0x20,
+  0x41, 0x4B, 0xC4, 0xB0, 0x46, 0x20,
+  0x59, 0xC3, 0x9C, 0x43, 0x45, 0x00
+};
+
 
 
 #include <HardwareSerial.h>
@@ -118,6 +130,8 @@ float kalmanla(float olcum, int sensorID) {
 Adafruit_BMP280 BMP;
 LSM6DSM IMU;
 TinyGPSPlus GPS;
+//HardwareSerial MAX3232Serial(2);
+
 HardwareSerial LoraSerial(2);
 // Class Tanımlaması
 
@@ -156,8 +170,15 @@ TaskHandle_t NORMAL_MOD_Handle;  // X
 TaskHandle_t SIT_MOD_Handle;     // X
 TaskHandle_t SUT_MOD_Handle;     // X
 
+void NormalAlgoritma(void* pvParameters);
+void SITAlgoritma(void* pvParameters);
+void SUTAlgoritma(void* pvParameters);
+
+void Haberlesme(void* pvParameters);
+
 
 void setup() {
+
   pinMode(BUZZER, OUTPUT);
   pinMode(PATLAMAK, OUTPUT);
 
@@ -165,6 +186,14 @@ void setup() {
 
   // MAX3232
   Serial.begin(115200);  // 192500
+
+#ifdef TESTMODU
+  Serial.println();
+  Serial.print("PUSULA ROKET TAKIMI TEST KIPI =  ");
+  Serial.println((const char*)X_BOOTLOADER);
+  Serial.println();
+#endif
+
 
   // LoRa ve GPS birlikte başlatma
   LoraSerial.begin(9600, SERIAL_8N1, GpsRX, LoraTX);
@@ -187,7 +216,7 @@ void setup() {
 
   MOD_SHIFT(false);
   delay(200);
-  /*
+  digitalWrite(BUZZER, LOW);
   // ÇEKİRDEK 1
   xTaskCreatePinnedToCore(
     MAX3232_LISTEN,
@@ -196,11 +225,7 @@ void setup() {
     NULL,
     1,
     &MAX3232_Handle,
-    1);
-
-*/
-  delay(2000);
-  digitalWrite(BUZZER, LOW);
+    0);
 }
 
 
@@ -212,27 +237,44 @@ enum MOD {
 
 MOD roket_mod = NORMAL_MOD;
 
+
+void SafeDeleteTask(TaskHandle_t* handle) {
+  if (*handle != NULL) {
+    vTaskDelete(*handle);
+    *handle = NULL;
+  }
+}
+
+
 void MOD_SHIFT(bool kill) {
 #ifdef TESTMODU
-  Serial.print("MOD SHIFT  ");
+  Serial.println();
+  Serial.print("MOD GECIS TALEBI ALINDI =  ");
   Serial.println(roket_mod);
-  Serial.println(BMP.readTemperature());
-
+  Serial.println();
 #endif
+
   if (kill) {
-    vTaskDelete(Haberlesme_Handle);
-    Haberlesme_Handle = NULL;
-    vTaskDelete(NORMAL_MOD_Handle);
-    NORMAL_MOD_Handle = NULL;
-    vTaskDelete(SIT_MOD_Handle);
-    SIT_MOD_Handle = NULL;
-    vTaskDelete(SUT_MOD_Handle);
-    SUT_MOD_Handle = NULL;
+    SafeDeleteTask(&Haberlesme_Handle);
+    SafeDeleteTask(&NORMAL_MOD_Handle);
+    SafeDeleteTask(&SIT_MOD_Handle);
+    SafeDeleteTask(&SUT_MOD_Handle);
   }
 
+#ifdef TESTMODU
+  Serial.print("MOD GECIS TALEBI ONAYLANDI = Gorevler olduruldu");
+  Serial.println();
+#endif
 
   // EN İYİ ÇEKİRDEKLERİ TERCIH ET
   if (roket_mod == NORMAL_MOD) {
+
+
+#ifdef TESTMODU
+    Serial.println("MOD GECISI TALEBI SONLANDI = normal mod devrede ");
+#endif
+
+
     xTaskCreatePinnedToCore(
       NormalAlgoritma,
       "X_NORMAL_MOD",
@@ -244,13 +286,18 @@ void MOD_SHIFT(bool kill) {
     delay(200);
     xTaskCreatePinnedToCore(
       Haberlesme,
-      "Y_HABERLESME",
+      "HABERLESME",
       10000,
       NULL,
       1,
       &Haberlesme_Handle,
       0);
+
   } else if (roket_mod == SIT_MOD) {
+#ifdef TESTMODU
+    Serial.println("MOD GECISI TALEBI SONLANDI = SIT mod devrede ");
+#endif
+
     xTaskCreatePinnedToCore(
       NormalAlgoritma,
       "X_NORMAL_MOD",
@@ -259,6 +306,7 @@ void MOD_SHIFT(bool kill) {
       1,
       &NORMAL_MOD_Handle,
       1);
+    delay(200);
 
     xTaskCreatePinnedToCore(
       SITAlgoritma,
@@ -289,77 +337,116 @@ const uint8_t CMD_STOP = 0x24;       // Durdur
 
 
 void MAX3232_LISTEN(void* pvParameters) {
-  if (Serial.available()) {
-    if (Serial.peek() != HEADER) {
-      Serial.read();
-      return;
-    }
+  for (;;) {
+    while (Serial.available()) {
 
-    uint8_t buf[5];                      // [HEADER, CMD, CHECKSUM, F1, F2]
-    if (Serial.available() < 5) return;  // tam gelmemiş sg
-    for (int i = 0; i < 5; i++) {
-      buf[i] = Serial.read();
-    }
+      if (Serial.peek() != HEADER) {
 
-    //3) Basit footer kontrolü
-    if (buf[3] != FOOTER1 || buf[4] != FOOTER2) {
-      Serial.println(F("Footer hatalı, atlanıyor."));
-      return;
-    }
+#ifdef TESTMODU
+        Serial.println("HEADER ERROR");
+        Serial.println();
+#endif
 
-    uint8_t cmd = buf[1];
-    uint8_t receivedCk = buf[2];
-
-    // 4) Yenilenmiş Checksum doğrulama:
-    //    Önce header ve command toplanır, sonra 0xFF ile mod alınır
-    uint8_t calcCk = (uint8_t)(((uint16_t)HEADER + cmd) % 0xFF);
-
-    if (calcCk != receivedCk) {
-      // Serial.print(F("Checksum hatası! Hesaplanan=0x"));  // WOW
-      // Serial.print(calcCk, HEX);
-      // Serial.print(F("  Gelen=0x"));
-      // Serial.println(receivedCk, HEX);
-      return;
-    }
-
-    // IF MOD FARKLI O HALDE MOD FARKLI İSE START-A-FUNCTION
-    // 5) Komuta göre fonksiyon çağır
-    MOD yeni_mod_talebi;
-    switch (cmd) {
-      case CMD_SIT_START:
-        yeni_mod_talebi = SIT_MOD;
+        Serial.read();
         break;
+      }
 
-      case CMD_SUT_START:
-        yeni_mod_talebi = SUT_MOD;
-        break;
+      uint8_t buf[5];  // [HEADER, CMD, CHECKSUM, F1, F2]
+      for (int i = 0; i < 5; i++) {
+        buf[i] = Serial.read();
+      }
 
-      case CMD_STOP:
-        yeni_mod_talebi = NORMAL_MOD;
-        break;
 
-      default:
+      if (buf[3] != FOOTER1 || buf[4] != FOOTER2) {
+
+#ifdef TESTMODU
+        Serial.println("FOOTER ERROR");
+        Serial.println();
+#endif
 
         break;
+      }
+
+
+      uint8_t cmd = buf[1];
+      uint8_t receivedCk = buf[2];
+
+#ifdef TESTMODU
+      Serial.print("GELEN KOMUT DUZENI = ");
+
+      for (int i = 0; i < 5; i++)
+        Serial.print(buf[i], HEX);
+
+      Serial.println();
+#endif
+
+
+      uint8_t calcCk = ((HEADER + cmd) % 0xFF);
+
+      if (calcCk != receivedCk) {
+        // break;
+
+#ifdef TESTMODU
+        Serial.print(F("Checksum hatası! Hesaplanan=0x"));  // WOW
+        Serial.print(calcCk, HEX);
+        Serial.print(F("  Gelen=0x"));
+        Serial.println(receivedCk, HEX);
+#endif
+      }
+
+      MOD yeni_mod_talebi = roket_mod;
+
+
+#ifdef TESTMODU
+      Serial.print("Eski MOD  = ");
+      Serial.println(yeni_mod_talebi);
+#endif
+
+      switch (cmd) {
+        case CMD_SIT_START:
+          yeni_mod_talebi = SIT_MOD;
+          break;
+
+        case CMD_SUT_START:
+          yeni_mod_talebi = SUT_MOD;
+          break;
+
+        case CMD_STOP:
+          yeni_mod_talebi = NORMAL_MOD;
+          break;
+
+        default:
+
+          break;
+      }
+#ifdef TESTMODU
+      Serial.print("Yeni MOD = ");
+      Serial.println(yeni_mod_talebi);
+#endif
+
+      if (yeni_mod_talebi != roket_mod) {
+        roket_mod = yeni_mod_talebi;
+#ifdef TESTMODU
+        Serial.print("TALEP DEGISIMI YAPILIYOR ");
+#endif
+        MOD_SHIFT(true);
+      }  // else WOW
     }
-
-
-    if (yeni_mod_talebi != roket_mod) {
-      MOD_SHIFT(true);
-    }  // else WOW
+    vTaskDelay(200 / portTICK_PERIOD_MS);
   }
 }
 
 
 void SITAlgoritma(void* pvParameters) {
   // NORMAL ALGORİTMA + AŞAĞISI
-
+#ifdef TESTMODU
+  Serial.print("XFUNCTION SIT ALGORUTMA ");
+#endif
   for (;;) {
 
     byte packetSit[36];
     int index = 0;  // packetSit
-
-    // Başlık
+    // HEADER
     packetSit[index++] = 0xAB;
 
 
@@ -368,7 +455,7 @@ void SITAlgoritma(void* pvParameters) {
                         X_Ivme_Kalman,
                         Y_Ivme_Kalman,
                         Z_Ivme_Kalman,
-                        GX,
+                        GX,  // AÇI İSTER Kİ
                         GY,
                         GZ };
 
@@ -380,11 +467,46 @@ void SITAlgoritma(void* pvParameters) {
       }
     }
 
-    packetSit[index++] = 0;     // checksum
+    int sum = 0;
+    for (int i = 0; i < 34; i++) {
+      sum += packetSit[i];
+    }
+
+    int checksum = sum % 256;
+#ifdef TESTMODU
+
+
+     Serial.print("GIDECEK KOMUT SUM = ");
+    Serial.println(sum);
+
+
+    Serial.print("GIDECEK KOMUT CHECKSUM = ");
+    Serial.println(checksum);
+
+    Serial.println();
+#endif
+
+    packetSit[index++] = checksum;  // checksum
+
     packetSit[index++] = 0x0D;  // 35
     packetSit[index++] = 0x0A;  // 36
 
-    // Serial.print(packetSit);
+#ifdef TESTMODU
+
+
+    Serial.print("GIDECEK KOMUT DUZENI = ");
+
+    for (int i = 0; i < 36; i++) {
+      if (packetSit[i] < 0x10) Serial.print("0");  // Tek basamaklı HEX için başına 0 koy
+      Serial.print(packetSit[i], HEX);
+      Serial.print(" ");
+    }
+
+    Serial.println();
+#endif
+
+
+    Serial.write(packetSit, sizeof(packetSit));
 
     vTaskDelay(SIT_INTERVAL / portTICK_PERIOD_MS);  // 10 hazret
   }
@@ -448,7 +570,7 @@ void KURTARMA() {
 
   float yeni_basinc = Basinc_Kalman;
 
-  if (yeni_basinc > eski_basinc+50)
+  if (yeni_basinc > eski_basinc + 50)
     irtifaKaybi = true;
 
   unsigned long new_millis = millis();
