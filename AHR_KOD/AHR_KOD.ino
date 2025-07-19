@@ -581,8 +581,8 @@ void KURTARMA() {
   }
 
 
-  float roketivme_X = abs(X_Ivme_Kalman) * 100;
-  float roketivme_Y = abs(Y_Ivme_Kalman) * 100;
+  int roketivme_X = abs(X_Ivme_Kalman) * 100;
+  int roketivme_Y = abs(Y_Ivme_Kalman) * 100;
 
   if (roketivme_X > 75 || roketivme_Y > 75)
     roketYatma = true;
