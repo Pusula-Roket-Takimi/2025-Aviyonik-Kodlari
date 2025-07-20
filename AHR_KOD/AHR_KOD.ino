@@ -629,25 +629,6 @@ void Haberlesme(void* pvParameters) {
     }
   }
   
-
-
-    // HEADERLER
-    LoraSerial.write((byte)0x00);
-    LoraSerial.write(ALICI_ADRES);
-    LoraSerial.write(ALICI_KANAL);
-
-
-
-
-
-
-
-
-
-
-
-
-
     LoraSerial.print("#BOD,");
 
 

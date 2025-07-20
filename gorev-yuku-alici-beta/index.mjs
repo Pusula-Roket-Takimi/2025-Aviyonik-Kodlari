@@ -1,26 +1,32 @@
-const SerialPort = require('serialport');
-const port = new SerialPort('/dev/ttyUSB0', { baudRate: 9600 });
+import { SerialPort } from 'serialport';
+const kartlar = await SerialPort.list();
+console.log(kartlar);
+
+const arduinoPORT = kartlar.find(port => port.manufacturer == "Prolific")?.path || 'COM6';
+
+const port = new SerialPort({ path: arduinoPORT, baudRate: 9600 });
 
 let buffer = Buffer.alloc(0);
-const PACKET_SIZE = 26; // 1 header + 24 data + 1 footer
+const PACKET_SIZE = 26; // 1 header + 6*4 data + 1 footer
 
 port.on('data', (chunk) => {
+  console.log('Received chunk:', chunk);
   buffer = Buffer.concat([buffer, chunk]);
 
   while (buffer.length >= PACKET_SIZE) {
     const headerIndex = buffer.indexOf(0xAA);
     if (headerIndex === -1) {
-      buffer = Buffer.alloc(0); // header yok, buffer temizle
+      buffer = Buffer.alloc(0); // header
       break;
     }
     if (buffer.length < headerIndex + PACKET_SIZE) {
-      // Tam paket gelmedi
+      // 
       break;
     }
 
-    // Footer kontrolü
+    // Footer 
     if (buffer[headerIndex + PACKET_SIZE - 1] === 0x55) {
-      // Paket tam, veri ayıkla
+      // 
       const data = buffer.slice(headerIndex + 1, headerIndex + PACKET_SIZE - 1);
 
       const enlem = data.readFloatLE(0);
