@@ -356,8 +356,12 @@ void SITAlgoritma(void* pvParameters) {
     float xms2 = X_Ivme_Kalman * GRAVITY;
     float yms2 = Y_Ivme_Kalman * GRAVITY;
     float zms2 = Z_Ivme_Kalman * GRAVITY;
-
+    
+    float xAngle = atan2(X_Ivme_Kalman, sqrt(Y_Ivme_Kalman * Y_Ivme_Kalman + Z_Ivme_Kalman * Z_Ivme_Kalman));
+    float yAngle = atan2(Y_Ivme_Kalman, sqrt(X_Ivme_Kalman * X_Ivme_Kalman + Z_Ivme_Kalman * Z_Ivme_Kalman));
+    float zAngle = ACI;
     // SIT'e Özel Veriler
+
 
     uint8_t packet[36];  // 1 header + 8*4 veri + 1 checksum + 2 footer
     int i = 0;
@@ -375,11 +379,11 @@ void SITAlgoritma(void* pvParameters) {
     i += 4;
     FtoU(&zms2, &packet[i]);
     i += 4;
-    FtoU(&GX, &packet[i]);
+    FtoU(&xAngle, &packet[i]);
     i += 4;  // MANYETOMETER LAZIM
-    FtoU(&GY, &packet[i]);
+    FtoU(&yAngle, &packet[i]);
     i += 4;  // MANYETOMETER LAZIM
-    FtoU(&GZ, &packet[i]);
+    FtoU(&zAngle, &packet[i]);
     i += 4;  // MANYETOMETER LAZIM
 
     // Checksum (ilk 34 byte)
