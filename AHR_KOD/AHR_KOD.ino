@@ -9,11 +9,11 @@
 #define PATLAMAK D12
 
 
-#define PATLAMA_SURESI 1100 // ?
-#define LORA_INTERVAL 900// ?
-#define SIT_INTERVAL 100 // 10HZ
-#define GPS_INTERVAL 900 // 1HZ
-#define MAX3232_INTERVAL 1000 // 1HZ
+#define PATLAMA_SURESI 1100    // ?
+#define LORA_INTERVAL 900      // ?
+#define SIT_INTERVAL 100       // 10HZ
+#define GPS_INTERVAL 900       // 1HZ
+#define MAX3232_INTERVAL 1000  // 1HZ
 
 
 #define SEALEVELPRESSURE_HPA (991)
@@ -145,9 +145,14 @@ HardwareSerial LoraSerial(2);
 
 double KALKIS_BASINC = 0.0;  // Başlangıç basıncı
 
-// RAW VERI SETI
+// HYI RAW VERI SETI
 float AX, AY, AZ, GX, GY, GZ, P, Pi, ACI;
-bool p_durum = false;
+bool p_durum = false; 
+bool irtifa_kosul = false;
+bool aci_kosul = false;
+
+
+
 
 // GPS
 float enlem, boylam, gps_irtifa;  // DOUBLE
@@ -286,6 +291,14 @@ void ParalelIslemYoneticisi(bool kill) {
 #ifdef TESTMODU
     Serial.println("MOD GECISI TALEBI = SUT mod devrede ");
 #endif
+ xTaskCreatePinnedToCore(
+      SUTAlgoritma,
+      "SIT_MOD",
+      10000,
+      NULL,
+      1,
+      &SUT_MOD_Handle,
+      0);
     //  NormalAlgoritma(false)
   }
 }
@@ -313,14 +326,23 @@ typedef union {
   uint8_t b[4];
 } FLOAT32_UINT8_DONUSTURUCU;
 
-// LITTLE -> BIG ENDIAN 
+// LITTLE ENDIAN -> BIG ENDIAN
 void FtoU(float* sayi, uint8_t* hedef) {
   FLOAT32_UINT8_DONUSTURUCU d;
   d.f = *sayi;
 
-  for (int i = 0; i < 4; i++) 
+  for (int i = 0; i < 4; i++)
     hedef[i] = d.b[3 - i];
-  
+}
+
+// BIG ENDIAN -> LITTLE ENDIAN
+void UtoF(uint8_t* kaynak, float* sayi) {
+  FLOAT32_UINT8_DONUSTURUCU d;
+
+  for (int i = 0; i < 4; i++)
+    d.b[3 - i] = kaynak[i]; 
+
+  *sayi = d.f;
 }
 
 
@@ -331,28 +353,36 @@ void SITAlgoritma(void* pvParameters) {
 
   for (;;) {
     // SIT'e Özel Veriler
-    float RAKIM = BMP.readAltitude(SEALEVELPRESSURE_HPA); 
+    float RAKIM = BMP.readAltitude(SEALEVELPRESSURE_HPA);
 
-    float xms2 =X_Ivme_Kalman * GRAVITY; 
-    float yms2 =Y_Ivme_Kalman * GRAVITY; 
-    float zms2 =Z_Ivme_Kalman * GRAVITY; 
+    float xms2 = X_Ivme_Kalman * GRAVITY;
+    float yms2 = Y_Ivme_Kalman * GRAVITY;
+    float zms2 = Z_Ivme_Kalman * GRAVITY;
 
     // SIT'e Özel Veriler
 
-    uint8_t packet[36]; // 1 header + 8*4 veri + 1 checksum + 2 footer
+    uint8_t packet[36];  // 1 header + 8*4 veri + 1 checksum + 2 footer
     int i = 0;
 
     // Header
     packet[i++] = 0xAB;
 
-    FtoU(&RAKIM,           &packet[i]); i += 4;
-    FtoU(&Basinc_Kalman,   &packet[i]); i += 4;
-    FtoU(&xms2,            &packet[i]); i += 4;
-    FtoU(&yms2,            &packet[i]); i += 4;
-    FtoU(&zms2,            &packet[i]); i += 4;
-    FtoU(&GX,              &packet[i]); i += 4;// MANYETOMETER LAZIM
-    FtoU(&GY,              &packet[i]); i += 4;// MANYETOMETER LAZIM
-    FtoU(&GZ,              &packet[i]); i += 4;// MANYETOMETER LAZIM
+    FtoU(&RAKIM, &packet[i]);
+    i += 4;
+    FtoU(&Basinc_Kalman, &packet[i]);
+    i += 4;
+    FtoU(&xms2, &packet[i]);
+    i += 4;
+    FtoU(&yms2, &packet[i]);
+    i += 4;
+    FtoU(&zms2, &packet[i]);
+    i += 4;
+    FtoU(&GX, &packet[i]);
+    i += 4;  // MANYETOMETER LAZIM
+    FtoU(&GY, &packet[i]);
+    i += 4;  // MANYETOMETER LAZIM
+    FtoU(&GZ, &packet[i]);
+    i += 4;  // MANYETOMETER LAZIM
 
     // Checksum (ilk 34 byte)
     uint16_t sum = 0;
@@ -390,8 +420,29 @@ void SITAlgoritma(void* pvParameters) {
 
 void SUTAlgoritma(void* pvParameters) {
   for (;;) {
-    KALMAN_KUR();
-    KURTARMA();
+
+    uint8_t packet[6];
+    packet[0] = 0xAA;  
+
+    uint8_t sonuc = 
+    (p_durum      << 7) | // Bit 7 – Ana paraşüt açma emri (ALGORITMA GLOBAL KOSUL)
+    (0            << 6) | // Bit 6 – Roket belirlenen irtifanın altına indi (şimdilik pasif)
+    (0            << 5) | // Bit 5 – Sürüklenme paraşütü açma emri (şimdilik pasif)
+    (irtifa_kosul << 4) | // Bit 4 – Roket irtifası alçalmaya başladı (ALGORITMA GLOBAL KOSUL)
+    (aci_kosul    << 3) | // Bit 3 – Gövde açısı / ivme eşiği aşıldı (ALGORITMA GLOBAL KOSUL)
+    (1            << 2) | // Bit 2 – Minimum irtifa eşiği aşıldı (sabit 1)
+    (0            << 1) | // Bit 1 – Motor önlem süresi doldu (şimdilik pasif)
+    (1            << 0);  // Bit 0 – Roket kalkışı algılandı (sabit 1)
+
+
+    packet[1] = sonuc;  ///data 1
+    packet[2] = 0x00;
+    packet[3] = (0xAA + sonuc + 0x00) % 256; // check
+    packet[4] = 0x0D;
+    packet[5] = 0x0A;
+    Serial.write(packet, sizeof(packet));
+
+    vTaskDelay(SIT_INTERVAL / portTICK_PERIOD_MS);
   }
 }
 
@@ -531,7 +582,7 @@ void MAX3232_Dinle() {
 
 // RAW Veri Okuma. Kart pozisyonuna göre düzeltme yapar.
 void SensorVeriOku() {
-  P = BMP.readPressure()/100; // hpa
+  P = BMP.readPressure() / 100;          // hpa
   Pi = BMP.readAltitude(KALKIS_BASINC);  //SEALEVELPRESSURE_HPA & metre
 
   // X ve Z'nin yerleri değiştirilmiştir
@@ -548,11 +599,9 @@ void SensorVeriOku() {
 
   ACI = atan2(sqrt(AX * AX + AY * AY), AZ) * 180.0 / PI;
 
- // AZ = AZ * -1; ///////////////
- ////////////////// onemlı
- //////////////////kart ters ise çarp
-
-
+  // AZ = AZ * -1; ///////////////
+  ////////////////// onemlı
+  //////////////////kart ters ise çarp
 }
 
 void KALMAN_KUR() {
@@ -565,28 +614,23 @@ void KALMAN_KUR() {
 float eski_basinc;
 
 void KURTARMA() {
-  bool irtifaKaybi = false, roketYatma = false;
-
+  unsigned long new_millis = millis();
   float yeni_basinc = Basinc_Kalman;
 
-  if (yeni_basinc > eski_basinc + 50)
-    irtifaKaybi = true;
-
-  unsigned long new_millis = millis();
+  irtifa_kosul = (yeni_basinc > eski_basinc);
 
   if (new_millis - basinc_millis >= 100) {
     basinc_millis = new_millis;
     eski_basinc = yeni_basinc;
   }
 
-
+  //TODO: directly from aci. aci. aci. aci
   int IvmeKosulX = abs(X_Ivme_Kalman) * 100 > 75;
   int IvmeKosulY = abs(Y_Ivme_Kalman) * 100 > 75;
 
-  if (IvmeKosulX || IvmeKosulY)
-    roketYatma = true;
+  aci_kosul = (IvmeKosulX || IvmeKosulY);
 
-  bool kosul = (irtifaKaybi && roketYatma);
+  bool kosul = (aci_kosul && aci_kosul);
 
   if (kosul && !p_durum) {
     p_durum = true;
@@ -655,7 +699,7 @@ void Haberlesme(void* pvParameters) {
     LoraSerial.print(",");
 
     // BMP
-   // LoraSerial.print("P=");
+    // LoraSerial.print("P=");
     //LoraSerial.print(Basinc_Kalman);
     //LoraSerial.print(",");
 
@@ -709,50 +753,3 @@ void Haberlesme(void* pvParameters) {
 
 
 void loop(){};
-
-// float f1 = 1.23;
-// float f2 = 4.56;
-// float f3 = 7.89;
-// float f4 = 10.11;
-// float f5 = 12.13;
-// float f6 = 14.15;
-// float f7 = 16.17;
-// float f8 = 18.19;
-
-// void setup() {
-//   Serial.begin(9600);
-// }
-
-// void loop() {
-//   byte packet[36];  // toplam paket uzunluğu
-
-//   int index = 0;
-
-//   // Başlık
-//   packet[index++] = 0xAB;
-
-//   // 8 float'ı sırayla ekle
-//   float floats[8] = {f1, f2, f3, f4, f5, f6, f7, f8};
-//   for (int i = 0; i < 8; i++) {
-//     byte *ptr = (byte*)(&floats[i]);
-//     for (int j = 0; j < 4; j++) {
-//       packet[index++] = ptr[j];
-//     }
-//   }
-
-//   // Paket sonu
-//   packet[index++] = 0;
-//   packet[index++] = 0x0D;
-//   packet[index++] = 0x0A;
-
-//   // Seri ekrana yaz
-//   Serial.print("Packet (HEX): ");
-//   for (int i = 0; i < 36; i++) {
-//     if (packet[i] < 0x10) Serial.print("0");  // 0x0F gibi başa 0 koy
-//     Serial.print(packet[i], HEX);
-//     Serial.print(" ");
-//   }
-//   Serial.println();
-
-//   delay(1000);
-// }
