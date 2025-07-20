@@ -166,8 +166,7 @@ float enlem, boylam, gps_irtifa;  // DOUBLE
 
 TaskHandle_t NORMAL_MOD_Handle;  // CORE 1
 TaskHandle_t Haberlesme_Handle;  // CORE 0
-TaskHandle_t SIT_MOD_Handle;     // CORE 0
-TaskHandle_t SUT_MOD_Handle;     // CORE 0
+TaskHandle_t OUKBTEST_Handle;    // CORE 0
 
 void NormalAlgoritma(void* pvParameters);
 void SITAlgoritma(void* pvParameters);
@@ -251,8 +250,7 @@ void ParalelIslemYoneticisi(bool kill) {
 
   if (kill) {
     TaskKill(&Haberlesme_Handle);
-    TaskKill(&SIT_MOD_Handle);
-    TaskKill(&SUT_MOD_Handle);
+    TaskKill(&OUKBTEST_Handle);
 #ifdef TESTMODU
     Serial.print("MOD GECIS TALEBI = gorevler olduruldu");
     Serial.println();
@@ -280,11 +278,11 @@ void ParalelIslemYoneticisi(bool kill) {
 #endif
     xTaskCreatePinnedToCore(
       SITAlgoritma,
-      "SIT_MOD",
+      "OUKBTEST_Handle",
       10000,
       NULL,
       1,
-      &SIT_MOD_Handle,
+      &OUKBTEST_Handle,
       0);
 
   } else if (roket_mod == SUT_MOD) {
@@ -293,11 +291,11 @@ void ParalelIslemYoneticisi(bool kill) {
 #endif
  xTaskCreatePinnedToCore(
       SUTAlgoritma,
-      "SIT_MOD",
+      "OUKBTEST_Handle",
       10000,
       NULL,
       1,
-      &SUT_MOD_Handle,
+      &OUKBTEST_Handle,
       0);
     //  NormalAlgoritma(false)
   }
