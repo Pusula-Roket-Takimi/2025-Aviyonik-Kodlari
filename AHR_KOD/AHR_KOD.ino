@@ -1,12 +1,5 @@
 //#define TESTMODU 1
 
-
-
-
-
-static bool aktif = true;
-static bool pasif = false;
-
 #define LoraTX D9
 #define GpsRX D13
 #define BUZZER D4
@@ -18,8 +11,12 @@ static bool pasif = false;
 #define PATLAMA_SURESI 1100
 #define LORA_INTERVAL 900
 #define SIT_INTERVAL 100
+#define GPS_INTERVAL 900
 
 #define SEALEVELPRESSURE_HPA (991)
+
+static bool aktif = true;
+static bool pasif = false;
 
 const uint8_t X_BOOTLOADER[] = {
   0x4D, 0x45, 0x48, 0x4D, 0x45, 0x54, 0x20,
@@ -142,14 +139,14 @@ HardwareSerial LoraSerial(2);
 
 
 // GLOBAL Değişken Tanımlamaları
-
+double KALKIS_BASINC= 0.0;  // Başlangıç basıncı
 // RAW VERI SETI
-float AX, AY, AZ, GX, GY, GZ, P, Pi;
+float AX, AY, AZ, GX, GY, GZ, P, Pi, ACI;
 bool p_durum = false;
 
 // GPS
-float enlem, boylam, gps_irtifa;
-
+float enlem, boylam, gps_irtifa;// DOUBLE
+// or double takviye
 
 // GLOBAL Değişken Tanımlamaları
 
@@ -164,16 +161,15 @@ float enlem, boylam, gps_irtifa;
 
 
 
-TaskHandle_t MAX3232_Handle;     // ALWAYS ON TASK
-TaskHandle_t Haberlesme_Handle;  // Y
-TaskHandle_t NORMAL_MOD_Handle;  // X
-TaskHandle_t SIT_MOD_Handle;     // X
-TaskHandle_t SUT_MOD_Handle;     // X
+TaskHandle_t MAX3232_Handle;     // ALWAYS ON TASK / CORE 1
+TaskHandle_t Haberlesme_Handle;  // CORE 0
+TaskHandle_t NORMAL_MOD_Handle;  // CORE 1
+TaskHandle_t SIT_MOD_Handle;     // CORE 0
+TaskHandle_t SUT_MOD_Handle;     // CORE 0
 
 void NormalAlgoritma(void* pvParameters);
 void SITAlgoritma(void* pvParameters);
 void SUTAlgoritma(void* pvParameters);
-
 void Haberlesme(void* pvParameters);
 
 
@@ -200,6 +196,7 @@ void setup() {
 
   // BMP başlatma
   BMP.begin(0x76);
+  KALKIS_BASINC = BMP.readPressure();
 
   // IMU başlatma
   IMU.begin();
@@ -352,9 +349,10 @@ void MAX3232_LISTEN(void* pvParameters) {
       }
 
       uint8_t buf[5];  // [HEADER, CMD, CHECKSUM, F1, F2]
-      for (int i = 0; i < 5; i++) {
+      for (int i = 0; i < 5; i++)
         buf[i] = Serial.read();
-      }
+
+        // TODO: CHECKSUM CHECK EDILECEK
 
 
       if (buf[3] != FOOTER1 || buf[4] != FOOTER2) {
@@ -380,20 +378,6 @@ void MAX3232_LISTEN(void* pvParameters) {
       Serial.println();
 #endif
 
-
-      uint8_t calcCk = ((HEADER + cmd) % 0xFF);
-
-      if (calcCk != receivedCk) {
-        // break;
-
-#ifdef TESTMODU
-        Serial.print(F("Checksum hatası! Hesaplanan=0x"));  // WOW
-        Serial.print(calcCk, HEX);
-        Serial.print(F("  Gelen=0x"));
-        Serial.println(receivedCk, HEX);
-#endif
-      }
-
       MOD yeni_mod_talebi = roket_mod;
 
 
@@ -402,7 +386,7 @@ void MAX3232_LISTEN(void* pvParameters) {
       Serial.println(yeni_mod_talebi);
 #endif
 
-      switch (cmd) {
+      switch (cmd) {// CHECKSUM BURADA CHECK EDILSIN
         case CMD_SIT_START:
           yeni_mod_talebi = SIT_MOD;
           break;
@@ -432,7 +416,8 @@ void MAX3232_LISTEN(void* pvParameters) {
         MOD_SHIFT(true);
       }  // else WOW
     }
-    vTaskDelay(200 / portTICK_PERIOD_MS);
+   //! yield(); TODO
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
 
@@ -440,7 +425,7 @@ void MAX3232_LISTEN(void* pvParameters) {
 void SITAlgoritma(void* pvParameters) {
   // NORMAL ALGORİTMA + AŞAĞISI
 #ifdef TESTMODU
-  Serial.print("XFUNCTION SIT ALGORUTMA ");
+  Serial.print("SITAlgoritma yuruyor:  ");
 #endif
   for (;;) {
 
@@ -455,7 +440,7 @@ void SITAlgoritma(void* pvParameters) {
                         X_Ivme_Kalman,
                         Y_Ivme_Kalman,
                         Z_Ivme_Kalman,
-                        GX,  // AÇI İSTER Kİ
+                        GX,  // AÇI İSTER Kİ... TODO
                         GY,
                         GZ };
 
@@ -522,20 +507,19 @@ void SUTAlgoritma(void* pvParameters) {
 
 void NormalAlgoritma(void* pvParameters) {
 #ifdef TESTMODU
-  Serial.print("ALGORITM running on core ");
+  Serial.print("NormalAlgoritma yuruyor:  ");
   Serial.println(xPortGetCoreID());
 #endif
 
   bool RAW = *((bool*)pvParameters);  // void* → bool*
 
   for (;;) {
-    if (RAW)
+    if (RAW)//if roket mod !=sut
       SensorVeriOku();
-
     KALMAN_KUR();
-    KURTARMA();
 
-    vTaskDelay(pdMS_TO_TICKS(1));  // TODO: Yield
+    KURTARMA();
+    yield();// kodu yield ile dene TODO 5hz falan
   }
 }
 
@@ -543,8 +527,9 @@ void NormalAlgoritma(void* pvParameters) {
 
 void SensorVeriOku() {
   P = BMP.readPressure();
-  Pi = BMP.readAltitude(SEALEVELPRESSURE_HPA);
-  // X ve Znin yerleri değiştirilmiştir
+  Pi = BMP.readAltitude(KALKIS_BASINC);//SEALEVELPRESSURE_HPA
+
+  // X ve Z'nin yerleri değiştirilmiştir
 
   AX = IMU.readFloatAccelZ();
   AY = IMU.readFloatAccelY();
@@ -553,6 +538,11 @@ void SensorVeriOku() {
   GX = IMU.readFloatGyroZ();
   GY = IMU.readFloatGyroY();
   GZ = IMU.readFloatGyroX();
+
+  // X ve Z'nin yerleri değiştirilmiştir
+
+  ACI = atan2(sqrt(AX * AX + AY * AY), AZ) * 180.0 / PI;
+
 }
 
 void KALMAN_KUR() {
@@ -562,7 +552,7 @@ void KALMAN_KUR() {
   kalmanla(P, SENSOR_BASINC);
 }
 
-unsigned long patlama_millis, basinc_millis;
+unsigned long patlama_millis, basinc_millis, gps_millis;
 float eski_basinc;
 
 void KURTARMA() {
@@ -581,10 +571,10 @@ void KURTARMA() {
   }
 
 
-  int roketivme_X = abs(X_Ivme_Kalman) * 100;
-  int roketivme_Y = abs(Y_Ivme_Kalman) * 100;
+  int IvmeKosulX = abs(X_Ivme_Kalman) * 100 > 75;
+  int IvmeKosulY = abs(Y_Ivme_Kalman) * 100 > 75;
 
-  if (roketivme_X > 75 || roketivme_Y > 75)
+  if (IvmeKosulX || IvmeKosulY)
     roketYatma = true;
 
   bool kosul = (irtifaKaybi && roketYatma);
@@ -611,16 +601,23 @@ void KURTARMA() {
 
 // TODO: better packing
 void Haberlesme(void* pvParameters) {
+
 #ifdef TESTMODU
-  Serial.print("Haberlesme running on core ");
+  Serial.print("Haberlesme yuruyor:    ");
   Serial.println(xPortGetCoreID());
 #endif
-  for (;;) {
 
-    // ASYNC
+  while (true) {
+
+
+  unsigned long new_millis = millis();
+
+  if (new_millis - gps_millis >= GPS_INTERVAL) {
+    gps_millis = new_millis;
+
+    // GPS
     while (LoraSerial.available())
       GPS.encode(LoraSerial.read());
-
 
     if (GPS.location.isValid()) {
       enlem = GPS.location.lat();
@@ -630,12 +627,27 @@ void Haberlesme(void* pvParameters) {
     if (GPS.altitude.isValid()) {
       gps_irtifa = GPS.altitude.meters();
     }
+  }
+  
 
 
     // HEADERLER
     LoraSerial.write((byte)0x00);
     LoraSerial.write(ALICI_ADRES);
     LoraSerial.write(ALICI_KANAL);
+
+
+
+
+
+
+
+
+
+
+
+
+
     LoraSerial.print("#BOD,");
 
 
@@ -686,6 +698,11 @@ void Haberlesme(void* pvParameters) {
     LoraSerial.print(Z_Ivme_Kalman);
     LoraSerial.print(",");
 
+// BETA
+       LoraSerial.print("D=");
+    LoraSerial.print(ACI);
+    LoraSerial.print(",");
+//
     LoraSerial.print("PD=");
     LoraSerial.print(p_durum);
     LoraSerial.print(",");
