@@ -11,7 +11,7 @@
 #define LORA_INTERVAL 400
 
 //#define ALICI_ADRES 31
-//#define ALICI_KANAL 50
+//#define ALICI_KANAL 60
 
 #define HEADER_BYTE 0xAA
 #define FOOTER_BYTE 0x55
