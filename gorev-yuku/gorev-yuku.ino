@@ -10,8 +10,8 @@
 
 #define LORA_INTERVAL 400
 
-#define ALICI_ADRES 32
-#define ALICI_KANAL 50
+//#define ALICI_ADRES 31
+//#define ALICI_KANAL 50
 
 #define HEADER_BYTE 0xAA
 #define FOOTER_BYTE 0x55
@@ -77,12 +77,17 @@ float sicaklik, yogunluk, basinc;
 
 
 typedef struct __attribute__((packed)) {
+  uint8_t header;  // 1 byte
+  
   float enlem;     // 4 byte
   float boylam;    // 4 byte
   float irtifa;    // 4 byte
   float basinc;    // 4 byte (Pa)
   float yogunluk;  // 4 byte (kg/m3)
   float sicaklik;  // 4 byte (°C)
+
+  uint8_t checksum;// 1 byte
+  uint8_t footer;  // 1 byte
 
 } VeriPaketi;
 
@@ -111,6 +116,7 @@ void Degiskenler(void* pvParameters) {
 void Haberlesme(void* pvParameters) {
   for (;;) {
     VeriPaketi paket;
+    paket.header = HEADER_BYTE;
     paket.enlem = enlem;
     paket.boylam = boylam;
     paket.irtifa = irtifa;
@@ -118,13 +124,16 @@ void Haberlesme(void* pvParameters) {
     paket.yogunluk = yogunluk;
     paket.sicaklik = sicaklik;
 
-    // LoraSerial.write((byte)0x00);
-    // LoraSerial.write(ALICI_ADRES);
-    //  LoraSerial.write(ALICI_KANAL);
-    LoraSerial.write(HEADER_BYTE);
-    LoraSerial.write((uint8_t*)&paket, sizeof(paket));
-    LoraSerial.write(FOOTER_BYTE);
+    uint8_t* gonderilecekPaket = (uint8_t*)&paket;
+    uint8_t sum = 0;
+    for (size_t i = 0; i < sizeof(VeriPaketi) - 2; ++i)
+      sum += gonderilecekPaket[i];
+    
+    paket.checksum = sum % 256;
 
+    paket.footer = FOOTER_BYTE;
+
+    LoraSerial.write(gonderilecekPaket, sizeof(VeriPaketi));
     vTaskDelay(LORA_INTERVAL / portTICK_PERIOD_MS);
   }
 }

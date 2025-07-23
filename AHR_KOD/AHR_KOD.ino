@@ -15,7 +15,8 @@
 #define GPS_INTERVAL 900       // 1HZ
 #define MAX3232_INTERVAL 1000  // 1HZ
 
-
+//#define ALICI_ADRES 21
+//#define ALICI_KANAL 50
 #define SEALEVELPRESSURE_HPA (991)
 #define GRAVITY 9.80665
 
@@ -147,7 +148,7 @@ double KALKIS_BASINC = 0.0;  // Başlangıç basıncı
 
 // HYI RAW VERI SETI
 float AX, AY, AZ, GX, GY, GZ, P, Pi, ACI;
-bool p_durum = false; 
+bool p_durum = false;
 bool irtifa_kosul = false;
 bool aci_kosul = false;
 
@@ -289,7 +290,7 @@ void ParalelIslemYoneticisi(bool kill) {
 #ifdef TESTMODU
     Serial.println("MOD GECISI TALEBI = SUT mod devrede ");
 #endif
- xTaskCreatePinnedToCore(
+    xTaskCreatePinnedToCore(
       SUTAlgoritma,
       "OUKBTEST_Handle",
       10000,
@@ -300,23 +301,6 @@ void ParalelIslemYoneticisi(bool kill) {
     //  NormalAlgoritma(false)
   }
 }
-/*
-typedef struct __attribute__((packed)) {
-  uint8_t header;  // 0xAB
-  float Pi;
-  float P;
-  float AX;
-  float AY;
-  float AZ;
-  float GX;          //
-  float GY;          //aci
-  float GZ;          //
-  uint8_t checksum;  // header + veri
-  uint8_t end1;      // 0x0D
-  uint8_t end2;      // 0x0A
-} SIT_PAKET;
-*/
-
 
 
 typedef union {
@@ -338,7 +322,7 @@ void UtoF(uint8_t* kaynak, float* sayi) {
   FLOAT32_UINT8_DONUSTURUCU d;
 
   for (int i = 0; i < 4; i++)
-    d.b[3 - i] = kaynak[i]; 
+    d.b[3 - i] = kaynak[i];
 
   *sayi = d.f;
 }
@@ -356,7 +340,7 @@ void SITAlgoritma(void* pvParameters) {
     float xms2 = X_Ivme_Kalman * GRAVITY;
     float yms2 = Y_Ivme_Kalman * GRAVITY;
     float zms2 = Z_Ivme_Kalman * GRAVITY;
-    
+
     float xAngle = atan2(X_Ivme_Kalman, sqrt(Y_Ivme_Kalman * Y_Ivme_Kalman + Z_Ivme_Kalman * Z_Ivme_Kalman));
     float yAngle = atan2(Y_Ivme_Kalman, sqrt(X_Ivme_Kalman * X_Ivme_Kalman + Z_Ivme_Kalman * Z_Ivme_Kalman));
     float zAngle = ACI;
@@ -384,7 +368,7 @@ void SITAlgoritma(void* pvParameters) {
     FtoU(&yAngle, &packet[i]);
     i += 4;  // MANYETOMETER LAZIM
     FtoU(&zAngle, &packet[i]);
-    i += 4;  // MANYETOMETER LAZIM
+    i += 4;  // MANYETOMETER LAZIM TODO
 
     // Checksum (ilk 34 byte)
     uint16_t sum = 0;
@@ -424,22 +408,22 @@ void SUTAlgoritma(void* pvParameters) {
   for (;;) {
 
     uint8_t packet[6];
-    packet[0] = 0xAA;  
+    packet[0] = 0xAA;
 
-    uint8_t sonuc = 
-    (p_durum      << 7) | // Bit 7 – Ana paraşüt açma emri (ALGORITMA GLOBAL KOSUL)
-    (0            << 6) | // Bit 6 – Roket belirlenen irtifanın altına indi (şimdilik pasif)
-    (0            << 5) | // Bit 5 – Sürüklenme paraşütü açma emri (şimdilik pasif)
-    (irtifa_kosul << 4) | // Bit 4 – Roket irtifası alçalmaya başladı (ALGORITMA GLOBAL KOSUL)
-    (aci_kosul    << 3) | // Bit 3 – Gövde açısı / ivme eşiği aşıldı (ALGORITMA GLOBAL KOSUL)
-    (1            << 2) | // Bit 2 – Minimum irtifa eşiği aşıldı (sabit 1)
-    (0            << 1) | // Bit 1 – Motor önlem süresi doldu (şimdilik pasif)
-    (1            << 0);  // Bit 0 – Roket kalkışı algılandı (sabit 1)
+    uint8_t sonuc =
+      (p_durum << 7) |       // Bit 7 – Ana paraşüt açma emri (ALGORITMA GLOBAL KOSUL)
+      (0 << 6) |             // Bit 6 – Roket belirlenen irtifanın altına indi (şimdilik pasif)
+      (0 << 5) |             // Bit 5 – Sürüklenme paraşütü açma emri (şimdilik pasif)
+      (irtifa_kosul << 4) |  // Bit 4 – Roket irtifası alçalmaya başladı (ALGORITMA GLOBAL KOSUL)
+      (aci_kosul << 3) |     // Bit 3 – Gövde açısı / ivme eşiği aşıldı (ALGORITMA GLOBAL KOSUL)
+      (1 << 2) |             // Bit 2 – Minimum irtifa eşiği aşıldı (sabit 1)
+      (0 << 1) |             // Bit 1 – Motor önlem süresi doldu (şimdilik pasif)
+      (1 << 0);              // Bit 0 – Roket kalkışı algılandı (sabit 1)
 
 
     packet[1] = sonuc;  ///data 1
     packet[2] = 0x00;
-    packet[3] = (0xAA + sonuc + 0x00) % 256; // check
+    packet[3] = (0xAA + sonuc + 0x00) % 256;  // check
     packet[4] = 0x0D;
     packet[5] = 0x0A;
     Serial.write(packet, sizeof(packet));
@@ -487,6 +471,7 @@ const uint8_t FOOTER2 = 0x0A;
 const uint8_t CMD_SIT_START = 0x20;  // Sit // 0xAA 0x20 0x8C 0x0D 0x0A
 const uint8_t CMD_SUT_START = 0x22;  // Sut // 0xAA 0x22 0x8E 0x0D 0x0A
 const uint8_t CMD_STOP = 0x24;       // Durdur // 0xAA 0x24 0x90 0x0D 0x0A
+//#include "driver/uart.h"
 
 
 void MAX3232_Dinle() {
@@ -498,7 +483,7 @@ void MAX3232_Dinle() {
       Serial.println();
 #endif
 
-      Serial.read();
+      // uart_flush_input(UART_NUM_0);
       break;
     }
 
@@ -647,14 +632,32 @@ void KURTARMA() {
 }
 
 
+#define HEADER_BYTE 0xAB
+#define FOOTER_BYTE 0x56
+
+typedef struct __attribute__((packed)) {
+  uint8_t header;  // 1 byte
+
+  float enlem;          // 4 byte
+  float boylam;         // 4 byte
+  float gps_irtifa;     // 4 byte
+  float basinc;         // 4 byte
+  float basinc_irtifa;  // 4 byte
+  float ivmex;          // 4 byte
+  float ivmey;          // 4 byte
+  float ivmez;          // 4 byte
+  float gyrox;          // 4 byte
+  float gyroy;          // 4 byte
+  float gyroz;          // 4 byte
+  float aci;            // 4 byte
+
+  uint8_t parasut_durum;  // 1 byte
+  uint8_t checksum;       // 1 byte
+  uint8_t footer;         // 1 byte
+
+} VeriPaketi;
 
 
-
-
-
-
-
-// TODO: better packing
 void Haberlesme(void* pvParameters) {
 
 #ifdef TESTMODU
@@ -663,8 +666,6 @@ void Haberlesme(void* pvParameters) {
 #endif
 
   while (true) {
-
-
     unsigned long new_millis = millis();
 
     if (new_millis - gps_millis >= GPS_INTERVAL) {
@@ -684,74 +685,43 @@ void Haberlesme(void* pvParameters) {
       }
     }
 
-    LoraSerial.print("#BOD,");
-
+    VeriPaketi paket;
+    // Header
+    paket.header = HEADER_BYTE;
 
     // GPS
-    LoraSerial.print("B=");
-    LoraSerial.print(boylam);
-    LoraSerial.print(",");
-
-    LoraSerial.print("E=");
-    LoraSerial.print(enlem);
-    LoraSerial.print(",");
-
-    LoraSerial.print("GI=");
-    LoraSerial.print(gps_irtifa);
-    LoraSerial.print(",");
+    paket.enlem = enlem;
+    paket.boylam = boylam;
+    paket.gps_irtifa = gps_irtifa;
 
     // BMP
-    // LoraSerial.print("P=");
-    //LoraSerial.print(Basinc_Kalman);
-    //LoraSerial.print(",");
-
-    LoraSerial.print("PI=");
-    LoraSerial.print(Pi);
-    LoraSerial.print(",");
+    paket.basinc = Basinc_Kalman;
+    paket.basinc_irtifa = Pi;
 
     // IMU
-    LoraSerial.print("GX=");
-    LoraSerial.print(GX);
-    LoraSerial.print(",");
+    paket.ivmex = X_Ivme_Kalman;
+    paket.ivmey = Y_Ivme_Kalman;
+    paket.ivmez = Z_Ivme_Kalman;
+    paket.gyrox = GX;
+    paket.gyroy = GY;
+    paket.gyroz = GZ;
+    paket.aci = ACI;
 
-    LoraSerial.print("GY=");
-    LoraSerial.print(GY);
-    LoraSerial.print(",");
+    paket.parasut_durum = p_durum ? 1 : 0;  //
 
-    LoraSerial.print("GZ=");
-    LoraSerial.print(GZ);
-    LoraSerial.print(",");
+    uint8_t* gonderilecekPaket = (uint8_t*)&paket;
+    
+    uint8_t sum = 0;
+    for (size_t i = 0; i < sizeof(VeriPaketi) - 2; ++i)
+      sum += gonderilecekPaket[i];
 
-    LoraSerial.print("AX=");
-    LoraSerial.print(X_Ivme_Kalman);
-    LoraSerial.print(",");
+    paket.checksum = sum % 256;
 
-    LoraSerial.print("AY=");
-    LoraSerial.print(Y_Ivme_Kalman);
-    LoraSerial.print(",");
+    paket.footer = FOOTER_BYTE;
 
-    LoraSerial.print("AZ=");
-    LoraSerial.print(Z_Ivme_Kalman);
-    LoraSerial.print(",");
-
-    // BETA
-    LoraSerial.print("D=");
-    LoraSerial.print(ACI);
-    LoraSerial.print(",");
-    //
-    LoraSerial.print("PD=");
-    LoraSerial.print(p_durum);
-    LoraSerial.print(",");
-
-    // FOOTER
-    LoraSerial.println("#EOD");
-
+    LoraSerial.write(gonderilecekPaket, sizeof(paket));
     vTaskDelay(LORA_INTERVAL / portTICK_PERIOD_MS);
-  }
+  }// TODOvTaskDelay convert to diğer şey
 }
-
-
-
-
 
 void loop(){};

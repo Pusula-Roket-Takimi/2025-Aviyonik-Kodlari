@@ -23,7 +23,7 @@
 </head>
 <body>
 
-<h1>Yer İstasyonu - Node.js Client</h1>
+<h1>Pusula Roket Takımı Yer İstasyonu</h1>
 
 <div class="connection-group">
   <h3>Aviyonik Bağlantısı</h3>
@@ -53,7 +53,6 @@
   </select>
   <button id="connectHYIBtn">Bağlan</button>
   <button id="disconnectHYIBtn" disabled>Bağlantıyı Kes</button>
-  <button id="sendHYIBtn" disabled>HYİ Verisi Gönder</button>
   <span id="hyiStatus" class="connection-status disconnected">Bağlı Değil</span>
 </div>
 
@@ -74,13 +73,11 @@
 <div id="log"></div>
 
 <script>
-const socket = new WebSocket(`ws://${window.location.hostname}:3000`);
+const socket = new WebSocket(`ws://${location.host}`);
 
 // Veri saklama
 let lastAviyonikData = {};
 let lastGorevData = {};
-let hyiSayac = 0;
-const takimId = 42;
 
 // Sayaçlar
 let aviyonikPacketCount = 0;
@@ -105,7 +102,7 @@ const hyiCountSpan = document.getElementById('hyiCount');
 
 function log(msg) {
   const timestamp = new Date().toLocaleTimeString();
-  logDiv.textContent += `[${timestamp}] ${msg}\n`;
+  logDiv.textContent += `[${timestamp}] ${msg}\n<br>`;
   logDiv.scrollTop = logDiv.scrollHeight;
 }
 
@@ -230,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'hyi-sent':
         hyiSentCount++;
         updateCounts();
-        log(`HYİ paketi gönderildi! Boyut: ${msg.data} byte, Sayaç: ${hyiSayac - 1}`);
+        log(`HYİ paketi gönderildi! Sayaç: ${msg.data}`);
         break;
       case 'hyi-send-error':
         log(`HYİ gönderim hatası: ${msg.data}`);
@@ -308,12 +305,6 @@ document.getElementById('disconnectHYIBtn').addEventListener('click', () => {
   socket.send(JSON.stringify({ type: 'disconnect-hyi' }));
 });
 
-document.getElementById('sendHYIBtn').addEventListener('click', () => {
-  const packet = buildHYIPacket();
-  hyiSayac = (hyiSayac + 1) % 256;
-  socket.send(JSON.stringify({ type: 'send-hyi-data', data: Array.from(packet) }));
-});
-
 // Parsing fonksiyonları
 function updateTable(tbody, data) {
   tbody.innerHTML = '';
@@ -329,66 +320,6 @@ function updateTable(tbody, data) {
   }
 }
 
-// HYİ paket oluşturma
-function floatToBytesLE(floatVal) {
-  let buffer = new ArrayBuffer(4);
-  new DataView(buffer).setFloat32(0, floatVal, true);
-  return Array.from(new Uint8Array(buffer));
-}
-
-function buildHYIPacket() {
-  const packet = new Uint8Array(78);
-  packet.set([0xFF, 0xFF, 0x54, 0x52], 0);
-  packet[4] = takimId;
-  packet[5] = hyiSayac;
-
-  function safeFloat(obj, key) {
-    return parseFloat(obj[key] || 0);
-  }
-
-  // Aviyonik verilerinden
-  const irtifa = safeFloat(lastAviyonikData, 'basinc_irtifa');
-  const gpsIrtifa = safeFloat(lastAviyonikData, 'gps_irtifa');
-  const enlem = safeFloat(lastAviyonikData, 'enlem');
-  const boylam = safeFloat(lastAviyonikData, 'boylam');
-  const gyroX = safeFloat(lastAviyonikData, 'gyrox');
-  const gyroY = safeFloat(lastAviyonikData, 'gyroy') ;
-  const gyroZ = safeFloat(lastAviyonikData, 'gyroz') ;
-  const accX = safeFloat(lastAviyonikData, 'ivmex');
-  const accY = safeFloat(lastAviyonikData, 'ivmey') ;
-  const accZ = safeFloat(lastAviyonikData, 'ivmez');
-  const angle = safeFloat(lastAviyonikData, 'ivmez');
-  const durum = parseInt(lastAviyonikData['parasut_durum'] || 0);
-
-  // Görev yükü verilerinden
-  const gGI = safeFloat(lastGorevData, 'irtifa');
-  const gE = safeFloat(lastGorevData, 'enlem');
-  const gB = safeFloat(lastGorevData, 'boylam');
-
-  packet.set(floatToBytesLE(irtifa), 6);
-  packet.set(floatToBytesLE(gpsIrtifa), 10);
-  packet.set(floatToBytesLE(enlem), 14);
-  packet.set(floatToBytesLE(boylam), 18);
-  packet.set(floatToBytesLE(gGI), 22);
-  packet.set(floatToBytesLE(gE), 26);
-  packet.set(floatToBytesLE(gB), 30);
-  packet.set(floatToBytesLE(gyroX), 46);
-  packet.set(floatToBytesLE(gyroY), 50);
-  packet.set(floatToBytesLE(gyroZ), 54);
-  packet.set(floatToBytesLE(accX), 58);
-  packet.set(floatToBytesLE(accY), 62);
-  packet.set(floatToBytesLE(accZ), 66);
-  packet.set(floatToBytesLE(angle), 70);
-  packet[74] = durum;
-
-  let checksum = 0;
-  for (let i = 4; i <= 74; i++) checksum += packet[i];
-  packet[75] = checksum % 256;
-  packet[76] = 0x0D;
-  packet[77] = 0x0A;
-
-  return packet;
-}
 </script>
 </body>
 </html>

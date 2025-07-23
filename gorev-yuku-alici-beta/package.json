@@ -1,4 +1,11 @@
 {
+	"name": "hyi",
+	"version": "1.0.0",
+	"description": "Hyi package for serial communication",
+	"main": "index.mjs",
+	"scripts": {
+		"start": "node index.mjs"
+	},
 	"dependencies": {
 		"serialport": "^13.0.0"
 	}
