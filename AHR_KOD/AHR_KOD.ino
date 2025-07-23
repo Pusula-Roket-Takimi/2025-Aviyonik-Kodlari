@@ -707,7 +707,7 @@ void Haberlesme(void* pvParameters) {
     paket.gyroz = GZ;
     paket.aci = ACI;
 
-    paket.parasut_durum = p_durum ? 1 : 0;  //
+    paket.parasut_durum = p_durum ? 2 : 1;  //
 
     uint8_t* gonderilecekPaket = (uint8_t*)&paket;
     
