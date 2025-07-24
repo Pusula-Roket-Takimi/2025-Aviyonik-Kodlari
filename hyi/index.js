@@ -3,6 +3,7 @@ const { SerialPort } = require('serialport');
 const path = require('path');
 const http = require('http');
 const WebSocket = require('ws');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -218,6 +219,14 @@ function sendGorevData(ws, msg) {
 
       if (checksum === calculated) {
         //   console.log('✅ Geçerli veri:', veri);
+        // --- Dosyaya yaz ---
+        const veriArray = GOREV_FIELDS.map(field => veri[field.key]);
+        const veriString = veriArray.join(' ') + '\n';
+        fs.appendFile('gorev_verileri.txt', veriString, (err) => {
+          if (err) {
+            console.error('Dosyaya yazma hatası:', err);
+          }
+        });
       } else {
         // console.warn(`⚠️ Checksum hatası: beklenen ${checksum}, hesaplanan ${calculated}`);
         break;// istemciye gönder
