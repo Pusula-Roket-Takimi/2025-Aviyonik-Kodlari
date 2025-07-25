@@ -19,8 +19,8 @@ let availablePorts = [];
 
 const floatFields = [
   'basinc_irtifa', // 4 byte
-  'roket_irtifa',
-  'roket_enlem',
+  'roket_irtifa',  //
+  'roket_enlem',  //
   'roket_boylam',
   'gorev_irtifa',
   'gorev_enlem',
@@ -228,7 +228,7 @@ function sendGorevData(ws, msg) {
           }
         });
       } else {
-         console.warn(`⚠️ Checksum hatası: beklenen ${checksum}, hesaplanan ${calculated}`);
+        
         break;// istemciye gönder
       }
       for (const key in veri)
