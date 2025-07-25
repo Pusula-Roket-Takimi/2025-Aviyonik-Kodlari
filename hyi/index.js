@@ -156,7 +156,7 @@ function sendAviyonikData(ws, msg) {
       if (checksum === calculated){
       //  console.log('✅ Geçerli veri:', veri);
       }else {
-        // console.warn(`⚠️ Checksum hatası: beklenen ${checksum}, hesaplanan ${calculated}`);
+        //console.warn(`⚠️ Checksum hatası: beklenen ${checksum}, hesaplanan ${calculated}`);
         break;// istemciye gönder bunu
       }
       for (const key in veri)
@@ -228,7 +228,7 @@ function sendGorevData(ws, msg) {
           }
         });
       } else {
-        // console.warn(`⚠️ Checksum hatası: beklenen ${checksum}, hesaplanan ${calculated}`);
+         console.warn(`⚠️ Checksum hatası: beklenen ${checksum}, hesaplanan ${calculated}`);
         break;// istemciye gönder
       }
       for (const key in veri)
@@ -265,13 +265,10 @@ function sendHyiData(ws, msg) {
     ws.send(JSON.stringify({ type: 'hyi-connected', data: msg.data }));
     setInterval(() => {
 
-
       const packet = new Uint8Array(78);
       packet.set([0xFF, 0xFF, 0x54, 0x52], 0);  // HEADER
       packet[4] = TAKIM_ID;
       packet[5] = hyiSayac;
-
-
 
       let offset = 6;
       for (let key of floatFields) {
@@ -304,7 +301,6 @@ function sendHyiData(ws, msg) {
     }, 200);
   });
 }
-
 // --- WebSocket bağlantıları ---
 wss.on('connection', (ws) => {
   console.log('Client bağlandı');
@@ -395,7 +391,7 @@ function broadcast(type, data) {
 }
 
 // Sunucuyu başlat
-server.listen(PORT, async () => {
+  server.listen(PORT, async () => {
   console.log(`Sunucu ${PORT} portunda çalışıyor`);
   console.log(`http://localhost:${PORT} adresini ziyaret edin`);
 
