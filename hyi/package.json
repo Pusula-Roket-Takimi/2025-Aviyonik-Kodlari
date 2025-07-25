@@ -2,8 +2,11 @@
   "name": "hyi",
   "version": "1.0.0",
   
-  "description": "Hyi package for serial communication",
+  "description": "Hakem Yer İstasyonu savaşı",
   "main": "index.js",
+  "author": {
+    "name": "Akif9748"
+  },
   "scripts": {
     "start": "node index.js"
   },

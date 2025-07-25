@@ -304,29 +304,7 @@ function sendHyiData(ws, msg) {
     }, 200);
   });
 }
-/*
- case 'send-hyi-data':
-        try {
-          if (hyiPort && hyiPort.isOpen) {
-            const buffer = Buffer.from(msg.data);
-            hyiPort.write(buffer, (err) => {
-              if (err) {
-                console.error('HYİ gönderim hatası:', err);
-                ws.send(JSON.stringify({ type: 'hyi-send-error', data: err.message }));
-              } else {
-                console.log('HYİ verisi gönderildi, boyut:', buffer.length);
-                ws.send(JSON.stringify({ type: 'hyi-sent', data: buffer.length }));
-              }
-            });
-          } else {
-            ws.send(JSON.stringify({ type: 'hyi-send-error', data: 'HYİ portu açık değil' }));
-          }
-        } catch (error) {
-          console.error('HYİ gönderim hatası:', error);
-          ws.send(JSON.stringify({ type: 'hyi-send-error', data: error.message }));
-        }
-        break;
-*/
+
 // --- WebSocket bağlantıları ---
 wss.on('connection', (ws) => {
   console.log('Client bağlandı');

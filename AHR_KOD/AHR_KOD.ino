@@ -452,7 +452,7 @@ void NormalAlgoritma(void* pvParameters) {
 
     if (roket_mod != SUT_MOD)  //SUT Harici SYNC sensör okuması
       SensorVeriOku();
-
+    
     KALMAN_KUR();
     KURTARMA();
     // yield();  // kodu yield ile dene TODO 5hz falan
@@ -473,68 +473,74 @@ const uint8_t CMD_SUT_START = 0x22;  // Sut // 0xAA 0x22 0x8E 0x0D 0x0A
 const uint8_t CMD_STOP = 0x24;       // Durdur // 0xAA 0x24 0x90 0x0D 0x0A
 //#include "driver/uart.h"
 
+struct TelemetriVerisi {
+  float irtifa;
+  float basinc;
+  float ivmeX;
+  float ivmeY;
+  float ivmeZ;
+  float aciX;
+  float aciY;
+  float aciZ;
+  uint8_t checksum;
+};
+
 
 void MAX3232_Dinle() {
   while (Serial.available()) {
+    if (roket_mod==SUT_MOD) {
+      if (Serial.peek() == 0xAB) {
+        uint8_t paket[34];
+        Serial.readBytes(paket, 34);
+
+      // Paket bitiş baytları
+      if (paket[32] != 0x0D || paket[33] != 0x0A) break;
+
+      // Checksum kontrolü
+      uint8_t hesaplanan = 0;
+      for (int i = 0; i < 31; i++) hesaplanan += paket[i];
+      if (hesaplanan != paket[31]) break;
+
+      // Float verileri dönüştür
+      int offset = 1;
+      UtoF(&paket[offset], &sonuc.irtifa); offset += 4;
+      UtoF(&paket[offset], &sonuc.basinc); offset += 4;
+      UtoF(&paket[offset], &sonuc.ivmeX);  offset += 4;
+      UtoF(&paket[offset], &sonuc.ivmeY);  offset += 4;
+      UtoF(&paket[offset], &sonuc.ivmeZ);  offset += 4;
+      UtoF(&paket[offset], &sonuc.aciX);   offset += 4;
+      UtoF(&paket[offset], &sonuc.aciY);   offset += 4;
+      UtoF(&paket[offset], &sonuc.aciZ);   offset += 4;
+
+      sonuc.checksum = paket[offset++];
+
+  uint8_t hesaplanan = 0;
+for (int i = 0; i < 31; i++) { // 0xAB dahil, checksum hariç
+  hesaplanan += veri[i];
+}
+if (hesaplanan != veri[31]) break;
+break;
+    }
+
+  }
     if (Serial.peek() != HEADER) {
-
-#ifdef TESTMODU
-      Serial.println("HEADER ERROR");
-      Serial.println();
-#endif
-
       // uart_flush_input(UART_NUM_0);
       break;
     }
 
-    uint8_t buf[5];  // [HEADER, CMD, CHECKSUM, F1, F2]
+    uint8_t buf[5];
     for (int i = 0; i < 5; i++)
       buf[i] = Serial.read();
-
-
 
     uint8_t cmd = buf[1];
     uint8_t receivedCk = buf[2];
     uint8_t calcCk = (HEADER + cmd) % 256;
-    if (calcCk != receivedCk) {
-#ifdef TESTMODU
-      Serial.println("CHECKSUM ERROR");
-      Serial.println();
-#endif
+    if (calcCk != receivedCk||buf[3] != FOOTER1 || buf[4] != FOOTER2) 
       break;
-    }
-
-
-
-
-    if (buf[3] != FOOTER1 || buf[4] != FOOTER2) {
-
-#ifdef TESTMODU
-      Serial.println("FOOTER ERROR");
-      Serial.println();
-#endif
-
-      break;
-    }
-
-#ifdef TESTMODU
-    Serial.print("GELEN KOMUT DUZENI = ");
-
-    for (int i = 0; i < 5; i++)
-      Serial.print(buf[i], HEX);
-
-    Serial.println();
-#endif
 
     MOD yeni_mod_talebi = roket_mod;
 
-
-#ifdef TESTMODU
-    Serial.print("Eski MOD  = ");
-    Serial.println(yeni_mod_talebi);
-#endif
-
-    switch (cmd) {  // CHECKSUM BURADA CHECK EDILSIN
+    switch (cmd) { 
       case CMD_SIT_START:
         yeni_mod_talebi = SIT_MOD;
         break;
@@ -551,16 +557,10 @@ void MAX3232_Dinle() {
 
         break;
     }
-#ifdef TESTMODU
-    Serial.print("Yeni MOD = ");
-    Serial.println(yeni_mod_talebi);
-#endif
+
 
     if (yeni_mod_talebi != roket_mod) {
       roket_mod = yeni_mod_talebi;
-#ifdef TESTMODU
-      Serial.print("TALEP DEGISIMI YAPILIYOR ");
-#endif
       ParalelIslemYoneticisi(true);
     }  // else WOW
   }
@@ -604,7 +604,7 @@ void KURTARMA() {
   unsigned long new_millis = millis();
   float yeni_basinc = Basinc_Kalman;
 
-  irtifa_kosul = (yeni_basinc > eski_basinc);
+  irtifa_kosul = (yeni_basinc > eski_basinc+1);
 
   if (new_millis - basinc_millis >= 100) {
     basinc_millis = new_millis;
