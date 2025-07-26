@@ -17,6 +17,10 @@ let gorevPort = null;
 let hyiPort = null;
 let availablePorts = [];
 
+// Hatalı veri sayacı
+let aviyonikErrorCount = 0;
+let gorevErrorCount = 0;
+
 const floatFields = [
   'basinc_irtifa', // 4 byte
   'roket_irtifa',  //
@@ -157,6 +161,8 @@ function sendAviyonikData(ws, msg) {
       //  console.log('✅ Geçerli veri:', veri);
       }else {
         //console.warn(`⚠️ Checksum hatası: beklenen ${checksum}, hesaplanan ${calculated}`);
+        aviyonikErrorCount++;
+        ws.send(JSON.stringify({ type: 'aviyonik-error-count-updated', data: aviyonikErrorCount }));
         break;// istemciye gönder bunu
       }
       for (const key in veri)
@@ -228,7 +234,8 @@ function sendGorevData(ws, msg) {
           }
         });
       } else {
-        
+        gorevErrorCount++;
+        ws.send(JSON.stringify({ type: 'gorev-error-count-updated', data: gorevErrorCount }));
         break;// istemciye gönder
       }
       for (const key in veri)
@@ -312,6 +319,8 @@ wss.on('connection', (ws) => {
       msg = JSON.parse(message);
     } catch (e) {
       console.error('Geçersiz mesaj:', message);
+      aviyonikErrorCount++;
+      ws.send(JSON.stringify({ type: 'aviyonik-error-count-updated', data: aviyonikErrorCount }));
       return;
     }
 
