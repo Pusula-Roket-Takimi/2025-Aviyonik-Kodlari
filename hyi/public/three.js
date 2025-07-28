@@ -15,7 +15,7 @@ function main() {
         return needResize;
     }
     const camera = new THREE.PerspectiveCamera(45, 2, 0.1, 1000);
-    camera.position.set(0, 200, 100); // daha uzaktan bak
+    camera.position.set(0, 300, 100); // daha uzaktan bak
     const controls = new THREE.OrbitControls(camera, canvas);
     controls.target.set(0, 5, 0);
     controls.update();
@@ -37,6 +37,8 @@ function main() {
         objLoader.load('rocket.obj', function(object) {
             // Modeli merkeze al ve büyüt
             object.scale.set(3, 3, 3); // Gerekirse bu değeri değiştir
+            // Modeli dikey yapmak için X ekseni etrafında döndür
+            object.rotation.y = THREE.MathUtils.degToRad(90);
             // Otomatik ortalama (bounding box ile)
             const box = new THREE.Box3().setFromObject(object);
             const center = box.getCenter(new THREE.Vector3());
