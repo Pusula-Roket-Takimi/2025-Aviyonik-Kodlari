@@ -498,8 +498,8 @@ function updateRocketVisualization(data) {
     if (window.setRocketAngle) window.setRocketAngle(rocketAngle);
   }
   
-  if (data.irtifa !== undefined) {
-    irtifa = data.irtifa;
+  if (data.basinc_irtifa !== undefined) {
+    irtifa = data.basinc_irtifa;
     rocketAltitudeSpan.textContent = `${irtifa.toFixed(1)} m`;
   }
   
