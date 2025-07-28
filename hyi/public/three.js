@@ -46,11 +46,9 @@ function main() {
     });
 window.setRocketAngle = function(angle) {
   if (rocketModel) {
-        rocketModel.rotation.x = 0
-   
-            rocketModel.rotation.y = 0;
+     
 
-    rocketModel.rotation.z = THREE.MathUtils.degToRad(angle);
+    rocketModel.rotation.y = THREE.MathUtils.degToRad(angle);
   } else {
     console.warn("Model henüz yüklenmedi.");
   }
