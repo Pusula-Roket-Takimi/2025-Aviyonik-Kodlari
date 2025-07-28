@@ -1,9 +1,9 @@
+let rocketModel = null;
 function main() {
     const canvas = document.getElementById('3dModelCanvas');
     const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
     renderer.setClearColor(0x1a1a1a);
     renderer.setPixelRatio(window.devicePixelRatio);
-
     function resizeRendererToDisplaySize(renderer) {
         const canvas = renderer.domElement;
         const width = canvas.clientWidth;
@@ -14,14 +14,12 @@ function main() {
         }
         return needResize;
     }
-
     const camera = new THREE.PerspectiveCamera(45, 2, 0.1, 1000);
     camera.position.set(0, 200, 100); // daha uzaktan bak
     const controls = new THREE.OrbitControls(camera, canvas);
     controls.target.set(0, 5, 0);
     controls.update();
     const scene = new THREE.Scene();
-
     // Işıklar
     scene.add(new THREE.HemisphereLight(0xB1E1FF, 0xB97A20, 2));
     const dirLight = new THREE.DirectionalLight(0xFFFFFF, 2.5);
@@ -42,11 +40,21 @@ function main() {
             // Otomatik ortalama (bounding box ile)
             const box = new THREE.Box3().setFromObject(object);
             const center = box.getCenter(new THREE.Vector3());
-            object.position.sub(center); // modeli tam merkeze al
+            rocketModel = object; // ⭐ Önemli: Global referans
             scene.add(object);
         });
     });
+window.setRocketAngle = function(angle) {
+  if (rocketModel) {
+        rocketModel.rotation.x = 0
+   
+            rocketModel.rotation.y = 0;
 
+    rocketModel.rotation.z = THREE.MathUtils.degToRad(angle);
+  } else {
+    console.warn("Model henüz yüklenmedi.");
+  }
+};
     function render() {
         if (resizeRendererToDisplaySize(renderer)) {
             const canvas = renderer.domElement;
@@ -58,4 +66,5 @@ function main() {
     }
     render();
 }
+
 window.addEventListener('DOMContentLoaded', main); 
