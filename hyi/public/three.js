@@ -2,7 +2,7 @@ let rocketModel = null;
 function main() {
     const canvas = document.getElementById('3dModelCanvas');
     const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
-    renderer.setClearColor(0x1a1a1a);
+    renderer.setClearColor(0x2a2a2a); // Daha nötr koyu gri
     renderer.setPixelRatio(window.devicePixelRatio);
     function resizeRendererToDisplaySize(renderer) {
         const canvas = renderer.domElement;
@@ -15,18 +15,15 @@ function main() {
         return needResize;
     }
     const camera = new THREE.PerspectiveCamera(45, 2, 0.1, 1000);
-    camera.position.set(0, 300, 100); // daha uzaktan bak
+    camera.position.set(300, 100, 300); // Daha uzaktan ve yan açıdan
     const controls = new THREE.OrbitControls(camera, canvas);
-    controls.target.set(0, 5, 0);
+    controls.target.set(0, 0, 0); // Roketin merkezine odaklan
     controls.update();
     const scene = new THREE.Scene();
-    // Işıklar
-    scene.add(new THREE.HemisphereLight(0xB1E1FF, 0xB97A20, 2));
-    const dirLight = new THREE.DirectionalLight(0xFFFFFF, 2.5);
-    dirLight.position.set(0, 10, 0);
-    dirLight.target.position.set(-5, 0, 0);
-    scene.add(dirLight);
-    scene.add(dirLight.target);
+    // Işıklar - Daha yumuşak ve doğal
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x404040, 0.8)); // Daha az şiddetli
+
+    
 
     // Model yükle
     const mtlLoader = new THREE.MTLLoader();
@@ -37,8 +34,8 @@ function main() {
         objLoader.load('rocket.obj', function(object) {
             // Modeli merkeze al ve büyüt
             object.scale.set(3, 3, 3); // Gerekirse bu değeri değiştir
-            // Modeli dikey yapmak için X ekseni etrafında döndür
-            object.rotation.y = THREE.MathUtils.degToRad(90);
+            // Modeli dikey yapmak için başlangıç rotasyonunu ayarla
+            object.rotation.y = THREE.MathUtils.degToRad(180); // 0 derecede dikey
             // Otomatik ortalama (bounding box ile)
             const box = new THREE.Box3().setFromObject(object);
             const center = box.getCenter(new THREE.Vector3());

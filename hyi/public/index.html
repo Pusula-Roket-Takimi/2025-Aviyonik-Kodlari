@@ -230,6 +230,17 @@ let rocketAngle = 0;
 
 // Harita için değişkenler
 let map, rocketMarker;
+
+navigator.geolocation.getCurrentPosition(
+  function (position) {
+    console.log("Enlem:", position.coords.latitude);
+    console.log("Boylam:", position.coords.longitude);
+  },
+  function (error) {
+    console.error("Konum alınamadı:", error);
+  }
+);
+
 let rocketLat = 39.9334, rocketLng = 32.8597; // Ankara koordinatları (varsayılan)
 
 // Grafikler için değişkenler

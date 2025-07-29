@@ -9,7 +9,7 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 const TAKIM_ID = 46;
-const PORT = 3000;
+const PORT = 80;
 
 // Port yönetimi
 let aviyonikPort = null;
@@ -60,8 +60,8 @@ const GOREV_FIELDS = [
 ];
 const GOREV_PAKET_SIZE = 4 * GOREV_FIELDS.length + 1 + 2; // 6 float + 1 checksum = 27 byte
 
-const AVIYONIK_HEADER = 0xAB; // Aviyonik header byte (örnek)
-const AVIYONIK_FOOTER = 0x56; // Aviyonik footer byte (örnek)
+const AVIYONIK_HEADER = 0xAB; // Aviyonik header byte 
+const AVIYONIK_FOOTER = 0x56; // Aviyonik footer byte 
 const AVIYONIK_FIELDS = [
   { key: 'roket_enlem', offset: 0 },
   { key: 'roket_boylam', offset: 4 },
@@ -157,10 +157,8 @@ function sendAviyonikData(ws, msg) {
 
       buffer = buffer.slice(headerIndex + AVIYONIK_PAKET_SIZE);
 
-      if (checksum === calculated){
-      //  console.log('✅ Geçerli veri:', veri);
-      }else {
-        //console.warn(`⚠️ Checksum hatası: beklenen ${checksum}, hesaplanan ${calculated}`);
+      if (checksum !== calculated) {
+        console.warn(`⚠️ Checksum hatası: beklenen ${checksum}, hesaplanan ${calculated}`);
         aviyonikErrorCount++;
         ws.send(JSON.stringify({ type: 'aviyonik-error-count-updated', data: aviyonikErrorCount }));
         break;// istemciye gönder bunu
@@ -223,26 +221,25 @@ function sendGorevData(ws, msg) {
 
       buffer = buffer.slice(headerIndex + GOREV_PAKET_SIZE);
 
-      if (checksum === calculated) {
-        //   console.log('✅ Geçerli veri:', veri);
-        // --- Dosyaya yaz ---
-        const veriArray = GOREV_FIELDS.map(field => veri[field.key]);
-        const veriString = veriArray.join(' ') + '\n';
-        fs.appendFile('gorev_verileri.txt', veriString, (err) => {
-          if (err) {
-            console.error('Dosyaya yazma hatası:', err);
-          }
-        });
-      } else {
+      if (checksum !== calculated) {
         gorevErrorCount++;
         ws.send(JSON.stringify({ type: 'gorev-error-count-updated', data: gorevErrorCount }));
-        break;// istemciye gönder
+        break;
       }
       for (const key in veri)
         HYI_SAF_VERILER[key] = veri[key];
 
 
       ws.send(JSON.stringify({ type: 'gorev-data', data: veri }));
+
+
+      const veriArray = GOREV_FIELDS.map(field => veri[field.key]);
+      const veriString = veriArray.join(' ') + '\n';
+      fs.appendFile('gorev_verileri.txt', veriString, (err) => {
+        if (err) {
+          console.error('Dosyaya yazma hatası:', err);
+        }
+      });
     }
   });
 }
@@ -400,7 +397,7 @@ function broadcast(type, data) {
 }
 
 // Sunucuyu başlat
-  server.listen(PORT, async () => {
+server.listen(PORT, async () => {
   console.log(`Sunucu ${PORT} portunda çalışıyor`);
   console.log(`http://localhost:${PORT} adresini ziyaret edin`);
 
