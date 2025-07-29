@@ -220,6 +220,32 @@
 <h2>Log</h2>
 <div id="log"></div>
 
+<h2>Kaydedilen Veriler</h2>
+<div class="connection-group">
+  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+    <h3> Bilimsel Görev Yükü Verileri</h3>
+    <button class="refresh-btn" id="loadGorevDataBtn">Verileri Yükle</button>
+    <button class="refresh-btn" id="clearGorevDataBtn" style="background: #dc3545;">Dosyayı Temizle</button>
+    <span id="fileInfo" style="margin-left: 10px; color: #aaa;"></span>
+  </div>
+  <div class="table-container" id="savedDataTableContainer">
+    <table id="savedDataTable">
+      <thead>
+        <tr>
+          <th>Zaman</th>
+          <th>Enlem</th>
+          <th>Boylam</th>
+          <th>İrtifa</th>
+          <th>Basınç</th>
+          <th>Yoğunluk</th>
+          <th>Sıcaklık</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
 <script>
 const socket = new WebSocket(`ws://${location.host}`);
 var xAngle;
@@ -255,6 +281,8 @@ const gorevTableBody = document.querySelector('#gorevTable tbody');
 const aviyonikStatus = document.getElementById('aviyonikStatus');
 const gorevStatus = document.getElementById('gorevStatus');
 const hyiStatus = document.getElementById('hyiStatus');
+const savedDataTableBody = document.querySelector('#savedDataTable tbody');
+const fileInfoSpan = document.getElementById('fileInfo');
 
 const aviyonikPortSelect = document.getElementById('aviyonikPortSelect');
 const gorevPortSelect = document.getElementById('gorevPortSelect');
@@ -300,6 +328,87 @@ function updateCounts() {
   hyiCountSpan.textContent = hyiSentCount;
   aviyonikErrorCountSpan.textContent = aviyonikErrorCount;
   gorevErrorCountSpan.textContent = gorevErrorCount;
+}
+
+// Kaydedilen verileri yükle
+async function loadGorevData() {
+  try {
+    const response = await fetch('/api/gorev-verileri');
+    const result = await response.json();
+    
+    if (result.success) {
+      savedDataTableBody.innerHTML = '';
+      
+      if (result.data.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="7" style="text-align: center; color: #aaa;">Henüz veri kaydedilmemiş</td>';
+        savedDataTableBody.appendChild(tr);
+      } else {
+        result.data.forEach(veri => {
+          const tr = document.createElement('tr');
+          const time = new Date(veri.timestamp).toLocaleTimeString();
+          tr.innerHTML = `
+            <td>${time}</td>
+            <td>${veri.gorev_enlem.toFixed(6)}</td>
+            <td>${veri.gorev_boylam.toFixed(6)}</td>
+            <td>${veri.gorev_irtifa.toFixed(2)} m</td>
+            <td>${veri.basinc.toFixed(2)} hPa</td>
+            <td>${veri.yogunluk.toFixed(2)} kg/m³</td>
+            <td>${veri.sicaklik.toFixed(2)} °C</td>
+          `;
+          savedDataTableBody.appendChild(tr);
+        });
+      }
+      
+      log(`Kaydedilen veriler yüklendi: ${result.data.length} kayıt`);
+    } else {
+      log('Veri yükleme hatası: ' + result.error);
+    }
+  } catch (error) {
+    log('Veri yükleme hatası: ' + error.message);
+  }
+}
+
+// Dosya bilgilerini güncelle
+async function updateFileInfo() {
+  try {
+    const response = await fetch('/api/gorev-verileri/size');
+    const result = await response.json();
+    
+    if (result.success) {
+      const sizeKB = (result.size / 1024).toFixed(2);
+      fileInfoSpan.textContent = `Dosya: ${result.lines} kayıt, ${sizeKB} KB`;
+    } else {
+      fileInfoSpan.textContent = 'Dosya bilgisi alınamadı';
+    }
+  } catch (error) {
+    fileInfoSpan.textContent = 'Dosya bilgisi alınamadı';
+  }
+}
+
+// Dosyayı temizle
+async function clearGorevData() {
+  if (!confirm('Kaydedilen tüm veriler silinecek. Emin misiniz?')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/gorev-verileri', { method: 'DELETE' });
+    const result = await response.json();
+    
+    if (result.success) {
+      log('Dosya temizlendi: ' + result.message);
+      savedDataTableBody.innerHTML = '';
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="7" style="text-align: center; color: #aaa;">Henüz veri kaydedilmemiş</td>';
+      savedDataTableBody.appendChild(tr);
+      updateFileInfo();
+    } else {
+      log('Dosya temizleme hatası: ' + result.error);
+    }
+  } catch (error) {
+    log('Dosya temizleme hatası: ' + error.message);
+  }
 }
 
 // Grafikleri başlat
@@ -547,6 +656,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initCharts();
   initMap();
   
+  // Dosya bilgilerini güncelle
+  updateFileInfo();
+  
   socket.addEventListener('open', () => {
     log('Sunucuya bağlanıldı');
   });
@@ -730,6 +842,16 @@ document.getElementById('connectHYIBtn').addEventListener('click', () => {
 
 document.getElementById('disconnectHYIBtn').addEventListener('click', () => {
   socket.send(JSON.stringify({ type: 'disconnect-hyi' }));
+});
+
+// Kaydedilen veriler için event listener'lar
+document.getElementById('loadGorevDataBtn').addEventListener('click', () => {
+  loadGorevData();
+  updateFileInfo();
+});
+
+document.getElementById('clearGorevDataBtn').addEventListener('click', () => {
+  clearGorevData();
 });
 
 // Parsing fonksiyonları
