@@ -87,6 +87,68 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Dosyaya yazılan verileri çekmek için endpoint'ler
+app.get('/api/gorev-verileri', (req, res) => {
+  try {
+    if (fs.existsSync('gorev_verileri.txt')) {
+      const data = fs.readFileSync('gorev_verileri.txt', 'utf8');
+      const lines = data.trim().split('\n');
+      const veriler = lines.map(line => {
+        const values = line.split(' ');
+        return {
+          gorev_enlem: parseFloat(values[0]) || 0,
+          gorev_boylam: parseFloat(values[1]) || 0,
+          gorev_irtifa: parseFloat(values[2]) || 0,
+          basinc: parseFloat(values[3]) || 0,
+          yogunluk: parseFloat(values[4]) || 0,
+          sicaklik: parseFloat(values[5]) || 0,
+          timestamp: new Date().toISOString()
+        };
+      });
+      res.json({ success: true, data: veriler });
+    } else {
+      res.json({ success: true, data: [] });
+    }
+  } catch (error) {
+    console.error('Görev verileri okuma hatası:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Dosyayı temizlemek için endpoint
+app.delete('/api/gorev-verileri', (req, res) => {
+  try {
+    if (fs.existsSync('gorev_verileri.txt')) {
+      fs.unlinkSync('gorev_verileri.txt');
+      res.json({ success: true, message: 'Dosya silindi' });
+    } else {
+      res.json({ success: true, message: 'Dosya zaten yok' });
+    }
+  } catch (error) {
+    console.error('Dosya silme hatası:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Dosya boyutunu kontrol etmek için endpoint
+app.get('/api/gorev-verileri/size', (req, res) => {
+  try {
+    if (fs.existsSync('gorev_verileri.txt')) {
+      const stats = fs.statSync('gorev_verileri.txt');
+      res.json({ 
+        success: true, 
+        size: stats.size,
+        lines: fs.readFileSync('gorev_verileri.txt', 'utf8').split('\n').length - 1
+      });
+    } else {
+      res.json({ success: true, size: 0, lines: 0 });
+    }
+  } catch (error) {
+    console.error('Dosya boyutu kontrol hatası:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Mevcut portları listele
 async function updateAvailablePorts() {
   try {
