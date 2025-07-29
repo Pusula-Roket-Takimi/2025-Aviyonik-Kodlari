@@ -125,34 +125,53 @@
 <h1>Pusula Roket Takımı Yer İstasyonu</h1>
 
 <div class="connection-group">
-  <h3>Aviyonik Bağlantısı</h3>
-  <select id="aviyonikPortSelect">
-    <option value="">Port seçin...</option>
-  </select>
-  <button id="connectAviyonikBtn">Bağlan</button>
-  <button id="disconnectAviyonikBtn" disabled>Bağlantıyı Kes</button>
-  <button class="refresh-btn" id="refreshPortsBtn">Portları Yenile</button>
-  <span id="aviyonikStatus" class="connection-status disconnected">Bağlı Değil</span>
+  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+    <h3>Bağlantılar</h3>
+    <button class="refresh-btn" id="refreshPortsBtn">Portları Yenile</button>
+  </div>
+  <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 5px;">
+      <label>Aviyonik:</label>
+      <select id="aviyonikPortSelect">
+        <option value="">Port seçin...</option>
+      </select>
+      <button id="connectAviyonikBtn">Bağlan</button>
+      <button id="disconnectAviyonikBtn" disabled>Kes</button>
+      <span id="aviyonikStatus" class="connection-status disconnected">Bağlı Değil</span>
+    </div>
+    
+    <div style="display: flex; align-items: center; gap: 5px;">
+      <label>Görev Yükü:</label>
+      <select id="gorevPortSelect">
+        <option value="">Port seçin...</option>
+      </select>
+      <button id="connectGorevBtn">Bağlan</button>
+      <button id="disconnectGorevBtn" disabled>Kes</button>
+      <span id="gorevStatus" class="connection-status disconnected">Bağlı Değil</span>
+    </div>
+    
+    <div style="display: flex; align-items: center; gap: 5px;">
+      <label>HYİ:</label>
+      <select id="hyiPortSelect">
+        <option value="">Port seçin...</option>
+      </select>
+      <button id="connectHYIBtn">Bağlan</button>
+      <button id="disconnectHYIBtn" disabled>Kes</button>
+      <span id="hyiStatus" class="connection-status disconnected">Bağlı Değil</span>
+    </div>
+  </div>
 </div>
 
-<div class="connection-group">
-  <h3>Görev Yükü Bağlantısı</h3>
-  <select id="gorevPortSelect">
-    <option value="">Port seçin...</option>
-  </select>
-  <button id="connectGorevBtn">Bağlan</button>
-  <button id="disconnectGorevBtn" disabled>Bağlantıyı Kes</button>
-  <span id="gorevStatus" class="connection-status disconnected">Bağlı Değil</span>
+
+
+<h2>Aviyonik Verisi</h2>
+<div class="table-container" id="aviyonikTableContainer">
+  <table id="aviyonikTable"><thead><tr><th>Parametre</th><th>Değer</th></tr></thead><tbody></tbody></table>
 </div>
 
-<div class="connection-group">
-  <h3>HYİ Bağlantısı</h3>
-  <select id="hyiPortSelect">
-    <option value="">Port seçin...</option>
-  </select>
-  <button id="connectHYIBtn">Bağlan</button>
-  <button id="disconnectHYIBtn" disabled>Bağlantıyı Kes</button>
-  <span id="hyiStatus" class="connection-status disconnected">Bağlı Değil</span>
+<h2>Görev Yükü Verisi</h2>
+<div class="table-container" id="gorevTableContainer">
+  <table id="gorevTable"><thead><tr><th>Parametre</th><th>Değer</th></tr></thead><tbody></tbody></table>
 </div>
 
 <!-- 3D Roket ve Harita Görünümü -->
@@ -171,16 +190,6 @@
     </div>
     <div id="map"></div>
   </div>
-</div>
-
-<h2>Aviyonik Verisi</h2>
-<div class="table-container" id="aviyonikTableContainer">
-  <table id="aviyonikTable"><thead><tr><th>Parametre</th><th>Değer</th></tr></thead><tbody></tbody></table>
-</div>
-
-<h2>Görev Yükü Verisi</h2>
-<div class="table-container" id="gorevTableContainer">
-  <table id="gorevTable"><thead><tr><th>Parametre</th><th>Değer</th></tr></thead><tbody></tbody></table>
 </div>
 
 <!-- Grafikler -->
@@ -213,6 +222,9 @@
 
 <script>
 const socket = new WebSocket(`ws://${location.host}`);
+var xAngle;
+var yAngle;
+var zAngle = 0
 
 // Veri saklama
 let lastAviyonikData = {};
@@ -490,12 +502,15 @@ function updateRocketVisualization(data) {
   let basinc = 0;
   
   // Sadece aviyonik verilerinden al
-  if (data.aci !== undefined) {
+  if (data.aci !== undefined && data.ivme_x !==undefined && data.ivme_y !==undefined && data.ivme_z !==undefined) {
     rocketAngle = data.aci;
     aci = rocketAngle;
+    yAngle = Math.atan2(data.ivme_y, data.ivme_z) * 180 / Math.PI
+    xAngle  =  Math.atan2(-data.ivme_x,Math.sqrt(data.ivme_y * data.ivme_y + data.ivme_z * data.ivme_z)) * 180 / Math.PI
+    
     rocketAngleSpan.textContent = `${rocketAngle.toFixed(1)}°`;
     // three.js modelini döndür
-    if (window.setRocketAngle) window.setRocketAngle(rocketAngle);
+    if (window.setRocketAngle) window.setRocketAngle(xAngle,yAngle,zAngle);
   }
   
   if (data.basinc_irtifa !== undefined) {
