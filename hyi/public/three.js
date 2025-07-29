@@ -46,11 +46,12 @@ function main() {
             scene.add(object);
         });
     });
-window.setRocketAngle = function(angle) {
+window.setRocketAngle = function(xAngle,yAngle,zAngle) {
   if (rocketModel) {
      
-
-    rocketModel.rotation.y = THREE.MathUtils.degToRad(angle);
+    rocketModel.rotation.x = THREE.MathUtils.degtoRead(xAngle)
+    rocketModel.rotation.y = THREE.MathUtils.degToRad(yAngle);
+    rocketModel.rotation.z = THREE.MathUtils.degtoRead(zAngle)
   } else {
     console.warn("Model henüz yüklenmedi.");
   }
