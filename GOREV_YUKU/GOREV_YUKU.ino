@@ -1,17 +1,8 @@
-/*
 #define BUZZER D0
 #define GpsRX D9
 #define LoraTX D12
-*/
 
-#define LoraTX D9
-#define GpsRX D13
-#define BUZZER D4
-
-#define LORA_INTERVAL 400
-
-//#define ALICI_ADRES 31
-//#define ALICI_KANAL 60
+#define LORA_INTERVAL 200
 
 #define HEADER_BYTE 0xAA
 #define FOOTER_BYTE 0x55
@@ -109,7 +100,7 @@ void Degiskenler(void* pvParameters) {
     basinc = BMP.readPressure();
     yogunluk = basinc / (R * (sicaklik + 273.15));
 
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(LORA_INTERVAL / portTICK_PERIOD_MS);
   }
 }
 
