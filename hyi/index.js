@@ -348,7 +348,7 @@ function sendHyiData(ws, msg) {
       packet[74] = HYI_SAF_VERILER.parasut_durum || 0;
 
       let checksum = 0;
-      for (let i = 6; i <= 74; i++) checksum += packet[i];
+      for (let i = 4; i < 75; i++) checksum += packet[i];
       packet[75] = checksum % 256;//76
       packet[76] = 0x0D;//77
       packet[77] = 0x0A;//78
