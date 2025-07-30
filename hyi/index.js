@@ -17,7 +17,8 @@ let gorevPort = null;
 let hyiPort = null;
 let availablePorts = [];
 
-// Hatalı veri sayacı
+// Hatalı veri sayaci
+
 let aviyonikErrorCount = 0;
 let gorevErrorCount = 0;
 
