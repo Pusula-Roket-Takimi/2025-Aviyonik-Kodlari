@@ -180,6 +180,7 @@
     <div class="info-panel">
       <div>Roket Açısı: <span id="rocketAngle">0°</span></div>
       <div>İrtifa: <span id="rocketAltitude">0 m</span></div>
+
     </div>
     <canvas id="3dModelCanvas"></canvas>
   </div>
@@ -248,9 +249,8 @@
 
 <script>
 const socket = new WebSocket(`ws://${location.host}`);
-var xAngle;
-var yAngle;
-var zAngle = 0
+// Roket açıları için değişkenler
+let rocketAngle = 0;
 
 // Veri saklama
 let lastAviyonikData = {};
@@ -264,20 +264,10 @@ let aviyonikErrorCount = 0;
 let gorevErrorCount = 0;
 
 // 3D Roket için değişkenler
-let rocketAngle = 0;
+// rocketAngle değişkeni yukarıda tanımlandı
 
 // Harita için değişkenler
-let map, rocketMarker;
-
-navigator.geolocation.getCurrentPosition(
-  function (position) {
-    console.log("Enlem:", position.coords.latitude);
-    console.log("Boylam:", position.coords.longitude);
-  },
-  function (error) {
-    console.error("Konum alınamadı:", error);
-  }
-);
+let map, rocketMarker, aviyonikLabel, gorevLabel;
 
 let rocketLat = 39.9334, rocketLng = 32.8597; // Ankara koordinatları (varsayılan)
 
@@ -613,6 +603,77 @@ function initMap() {
       iconAnchor: [15, 15]
     })
   }).addTo(map);
+  
+  // Aviyonik konum etiketi
+  aviyonikLabel = L.marker([rocketLat, rocketLng], {
+    icon: L.divIcon({
+      className: 'aviyonik-label',
+      html: '<div style="background: rgba(255, 0, 0, 0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; white-space: nowrap; cursor: pointer;">AVİYONİK</div>',
+      iconSize: [60, 20],
+      iconAnchor: [30, 10]
+    })
+  }).addTo(map);
+  
+  // Aviyonik etiketine tıklama olayı
+  aviyonikLabel.on('click', function() {
+    map.setView([rocketLat, rocketLng], 18);
+    console.log('Aviyonik konumuna gidildi');
+  });
+  
+  // Görev yükü konum etiketi
+  gorevLabel = L.marker([rocketLat, rocketLng], {
+    icon: L.divIcon({
+      className: 'gorev-label',
+      html: '<div style="background: rgba(0, 255, 0, 0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; white-space: nowrap; cursor: pointer;">GÖREV YÜKÜ</div>',
+      iconSize: [80, 20],
+      iconAnchor: [40, 10]
+    })
+  }).addTo(map);
+  
+  // Görev yükü etiketine tıklama olayı
+  gorevLabel.on('click', function() {
+    // Görev yükü konumunu al (eğer varsa)
+    if (lastGorevData.gorev_enlem && lastGorevData.gorev_boylam) {
+      map.setView([lastGorevData.gorev_enlem, lastGorevData.gorev_boylam], 18);
+      console.log('Görev yükü konumuna gidildi');
+    } else {
+      map.setView([rocketLat, rocketLng], 18);
+      console.log('Roket konumuna gidildi (görev yükü konumu yok)');
+    }
+  });
+  
+  // Tarayıcı konumunu al ve haritada göster
+  navigator.geolocation.getCurrentPosition(
+    function (position) {
+      console.log("Tarayıcı Enlem:", position.coords.latitude);
+      console.log("Tarayıcı Boylam:", position.coords.longitude);
+      
+      // Aviyonik bağlı değilse haritayı tarayıcı konumuna ayarla
+      if (aviyonikStatus.textContent === 'Bağlı Değil') {
+        map.setView([position.coords.latitude, position.coords.longitude], 13);
+        console.log("Harita tarayıcı konumuna ayarlandı");
+      }
+      
+      // Tarayıcı konumunu haritada göster
+      const browserMarker = L.marker([position.coords.latitude, position.coords.longitude], {
+        icon: L.divIcon({
+          className: 'browser-location',
+          html: '<div style="background: rgba(0, 0, 255, 0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; white-space: nowrap; cursor: pointer;">TARAYICI</div>',
+          iconSize: [70, 20],
+          iconAnchor: [35, 10]
+        })
+      }).addTo(map);
+      
+      // Tarayıcı etiketine tıklama olayı
+      browserMarker.on('click', function() {
+        map.setView([position.coords.latitude, position.coords.longitude], 18);
+        console.log('Tarayıcı konumuna gidildi');
+      });
+    },
+    function (error) {
+      console.error("Konum alınamadı:", error);
+    }
+  );
 }
 
 // Roket verilerini güncelle
@@ -622,15 +683,26 @@ function updateRocketVisualization(data) {
   let basinc = 0;
   
   // Sadece aviyonik verilerinden al
-  if (data.aci !== undefined && data.ivme_x !==undefined && data.ivme_y !==undefined && data.ivme_z !==undefined) {
+  if (data.aci !== undefined && data.ivme_x !== undefined && data.ivme_y !== undefined && data.ivme_z !== undefined) {
     rocketAngle = data.aci;
     aci = rocketAngle;
-    yAngle = Math.atan2(data.ivme_y, data.ivme_z) * 180 / Math.PI
-    xAngle  =  Math.atan2(-data.ivme_x,Math.sqrt(data.ivme_y * data.ivme_y + data.ivme_z * data.ivme_z)) * 180 / Math.PI
+    
+    // İvme verilerinden açıları hesapla
+    // Pitch (X ekseni) - yukarı-aşağı açı
+    const pitch = Math.atan2(-data.ivme_x, Math.sqrt(data.ivme_y * data.ivme_y + data.ivme_z * data.ivme_z)) * 180 / Math.PI;
+    
+    // Yaw (Y ekseni) - sağa-sola açı
+    const yaw = Math.atan2(data.ivme_y, data.ivme_z) * 180 / Math.PI;
+    
+    
+    const roll =0
     
     rocketAngleSpan.textContent = `${rocketAngle.toFixed(1)}°`;
+    
     // three.js modelini döndür
-    if (window.setRocketAngle) window.setRocketAngle(xAngle,yAngle,zAngle);
+    if (window.setRocketAngle) {
+      window.setRocketAngle(pitch, yaw, roll);
+    }
   }
   
   if (data.basinc_irtifa !== undefined) {
@@ -651,6 +723,10 @@ function updateRocketVisualization(data) {
     
     if (rocketMarker) {
       rocketMarker.setLatLng([rocketLat, rocketLng]);
+      // Aviyonik etiketini roket konumuna yerleştir
+      aviyonikLabel.setLatLng([rocketLat, rocketLng]);
+      // Görev yükü etiketini roket konumuna yerleştir
+      gorevLabel.setLatLng([rocketLat, rocketLng]);
       map.setView([rocketLat, rocketLng]);
     }
   }
@@ -700,12 +776,29 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStatus(aviyonikStatus, 'connected');
         document.getElementById('connectAviyonikBtn').disabled = true;
         document.getElementById('disconnectAviyonikBtn').disabled = false;
+        
+        // Aviyonik bağlandığında haritayı roket konumuna ayarla
+        if (rocketLat && rocketLng) {
+          map.setView([rocketLat, rocketLng], 13);
+          console.log("Aviyonik bağlandı, harita roket konumuna ayarlandı");
+        }
         break;
       case 'aviyonik-disconnected':
         log('Aviyonik bağlantısı kesildi');
         updateStatus(aviyonikStatus, 'disconnected');
         document.getElementById('connectAviyonikBtn').disabled = false;
         document.getElementById('disconnectAviyonikBtn').disabled = true;
+        
+        // Aviyonik bağlantısı kesildiğinde haritayı tarayıcı konumuna ayarla
+        navigator.geolocation.getCurrentPosition(
+          function (position) {
+            map.setView([position.coords.latitude, position.coords.longitude], 13);
+            console.log("Aviyonik bağlantısı kesildi, harita tarayıcı konumuna ayarlandı");
+          },
+          function (error) {
+            console.error("Konum alınamadı:", error);
+          }
+        );
         break;
       case 'aviyonik-error':
         log(`Aviyonik hatası: ${msg.data}`);
@@ -742,6 +835,14 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'gorev-data':
         lastGorevData = msg.data;
         updateTable(gorevTableBody, msg.data);
+        
+        // Görev yükü konumunu güncelle
+        if (msg.data.gorev_enlem !== undefined && msg.data.gorev_boylam !== undefined) {
+          if (gorevLabel) {
+            gorevLabel.setLatLng([msg.data.gorev_enlem, msg.data.gorev_boylam]);
+          }
+        }
+        
         gorevPacketCount++;
         updateCounts();
         log(`Görev Yükü: ${Object.keys(msg.data).length} parametre`);
