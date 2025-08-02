@@ -225,10 +225,10 @@ void SensorVeriOku() {
   // X ve Z'nin yerleri değiştirilmiştir
   RawSensorData.AX = IMU.readFloatAccelZ();
   RawSensorData.AY = IMU.readFloatAccelY();
-  RawSensorData.AZ = IMU.readFloatAccelX();  // AZ *= -1; // kart tersse ters yap bunu mesela
+  RawSensorData.AZ = IMU.readFloatAccelX(); // kart tersse ters yap bunu mesela
   // X ve Z'nin yerleri değiştirilmiştir
 
-  RawSensorData.ACI = atan2(sqrt(RawSensorData.AX * RawSensorData.AX + RawSensorData.AY * RawSensorData.AY), RawSensorData.AZ) * 180.0 / PI;
+  RawSensorData.ACI = atan2(sqrt(RawSensorData.AX * RawSensorData.AX + RawSensorData.AY * RawSensorData.AY), -RawSensorData.AZ) * 180.0 / PI;
 }
 
 
@@ -443,7 +443,7 @@ void SITAlgoritma(void* pvParameters) {
     float yms2 = YIvme_Kalman.X * GRAVITY;
     float zms2 = ZIvme_Kalman.X * GRAVITY;
 
-    float yAngle = atan2(YIvme_Kalman.X, ZIvme_Kalman.X) * 180 / PI;                                                            // roll
+    float yAngle = atan2(YIvme_Kalman.X, -ZIvme_Kalman.X) * 180 / PI;                                                            // roll
     float xAngle = atan2(-XIvme_Kalman.X, sqrt(YIvme_Kalman.X * YIvme_Kalman.X + ZIvme_Kalman.X * ZIvme_Kalman.X)) * 180 / PI;  // pitch
     float zAngle = 0;                                                                                                           // yaw degistirme dusuncem yok teknofest
     //////////////////////////////////////////////////////////////////////////////// SIT'e Özel Veriler
