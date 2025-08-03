@@ -188,6 +188,14 @@
     <div class="info-panel">
       <div>Enlem: <span id="rocketLat">0°</span></div>
       <div>Boylam: <span id="rocketLng">0°</span></div>
+      <div style="margin-top: 10px; border-top: 1px solid #555; padding-top: 10px;">
+        <div style="color: #ff6b6b; font-weight: bold;">Aviyonik Mesafe: <span id="distanceToRocket">0 m</span></div>
+        <div style="font-size: 12px; color: #aaa;">Aviyonik ↔ Yer İstasyonu</div>
+      </div>
+      <div style="margin-top: 10px; border-top: 1px solid #555; padding-top: 10px;">
+        <div style="color: #4ecdc4; font-weight: bold;">Görev Mesafesi: <span id="distanceToGorev">0 m</span></div>
+        <div style="font-size: 12px; color: #aaa;">Görev Yükü ↔ Yer İstasyonu</div>
+      </div>
     </div>
     <div id="map"></div>
   </div>
@@ -269,7 +277,9 @@ let gorevErrorCount = 0;
 // Harita için değişkenler
 let map, rocketMarker, aviyonikLabel, gorevLabel;
 
-let rocketLat = 39.9334, rocketLng = 32.8597; // Ankara koordinatları (varsayılan)
+let rocketLat = 38.3726, rocketLng = 34.0254; // Aksaray koordinatları (varsayılan)
+let browserLat = null, browserLng = null; // Tarayıcı konumu
+let gorevLat = 38.3726, gorevLng = 34.0254; // Görev yükü konumu (başlangıçta roket ile aynı)
 
 // Grafikler için değişkenler
 let irtifaChart, aciChart, basincChart;
@@ -300,6 +310,8 @@ const rocketAngleSpan = document.getElementById('rocketAngle');
 const rocketAltitudeSpan = document.getElementById('rocketAltitude');
 const rocketLatSpan = document.getElementById('rocketLat');
 const rocketLngSpan = document.getElementById('rocketLng');
+const distanceToRocketSpan = document.getElementById('distanceToRocket');
+const distanceToGorevSpan = document.getElementById('distanceToGorev');
 
 function log(msg) {
   const timestamp = new Date().toLocaleTimeString();
@@ -645,20 +657,32 @@ function initMap() {
   // Tarayıcı konumunu al ve haritada göster
   navigator.geolocation.getCurrentPosition(
     function (position) {
-      console.log("Tarayıcı Enlem:", position.coords.latitude);
-      console.log("Tarayıcı Boylam:", position.coords.longitude);
+      browserLat = position.coords.latitude;
+      browserLng = position.coords.longitude;
+      
+      console.log("Tarayıcı Enlem:", browserLat);
+      console.log("Tarayıcı Boylam:", browserLng);
+      
+      // Mesafe hesapla ve göster
+      if (rocketLat && rocketLng) {
+        const distance = calculateDistance(rocketLat, rocketLng, browserLat, browserLng);
+        distanceToRocketSpan.textContent = `${distance.toFixed(0)} m`;
+      }
+      
+      // Görev yükü mesafesini de hesapla
+      updateGorevDistance();
       
       // Aviyonik bağlı değilse haritayı tarayıcı konumuna ayarla
       if (aviyonikStatus.textContent === 'Bağlı Değil') {
-        map.setView([position.coords.latitude, position.coords.longitude], 13);
+        map.setView([browserLat, browserLng], 13);
         console.log("Harita tarayıcı konumuna ayarlandı");
       }
       
       // Tarayıcı konumunu haritada göster
-      const browserMarker = L.marker([position.coords.latitude, position.coords.longitude], {
+      const browserMarker = L.marker([browserLat, browserLng], {
         icon: L.divIcon({
           className: 'browser-location',
-          html: '<div style="background: rgba(0, 0, 255, 0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; white-space: nowrap; cursor: pointer;">TARAYICI</div>',
+          html: '<div style="background: rgba(0, 0, 255, 0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; white-space: nowrap; cursor: pointer;">Yer İstasyonu </div>',
           iconSize: [70, 20],
           iconAnchor: [35, 10]
         })
@@ -666,7 +690,7 @@ function initMap() {
       
       // Tarayıcı etiketine tıklama olayı
       browserMarker.on('click', function() {
-        map.setView([position.coords.latitude, position.coords.longitude], 18);
+        map.setView([browserLat, browserLng], 18);
         console.log('Tarayıcı konumuna gidildi');
       });
     },
@@ -721,6 +745,15 @@ function updateRocketVisualization(data) {
     rocketLatSpan.textContent = `${rocketLat.toFixed(6)}°`;
     rocketLngSpan.textContent = `${rocketLng.toFixed(6)}°`;
     
+    // Mesafe hesapla ve güncelle
+    if (browserLat && browserLng) {
+      const distance = calculateDistance(rocketLat, rocketLng, browserLat, browserLng);
+      distanceToRocketSpan.textContent = `${distance.toFixed(0)} m`;
+    }
+    
+    // Görev yükü mesafesini de güncelle
+    updateGorevDistance();
+    
     if (rocketMarker) {
       rocketMarker.setLatLng([rocketLat, rocketLng]);
       // Aviyonik etiketini roket konumuna yerleştir
@@ -731,9 +764,46 @@ function updateRocketVisualization(data) {
     }
   }
   
+  // Mesafe hesapla
+  const distance = calculateDistance(rocketLat, rocketLng, position.coords.latitude, position.coords.longitude);
+  distanceToRocketSpan.textContent = `${distance.toFixed(0)} m`;
+  
   // Grafiklere veri ekle (sadece aviyonik verilerinden)
   if (irtifa > 0 || aci !== 0 || basinc > 0) {
     addChartData(irtifa, aci, basinc);
+  }
+}
+
+// Mesafe hesaplama (Haversine formülü)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // km cinsinden Dünya'nın yarıçapı
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c; // km
+  return distance * 1000; // metre cinsine çevir
+}
+
+// Görev yükü mesafesini hesapla ve güncelle
+function updateGorevDistance() {
+  if (browserLat && browserLng) {
+    if (gorevLat && gorevLng) {
+      // Görev yükü konumu varsa onu kullan
+      const distance = calculateDistance(gorevLat, gorevLng, browserLat, browserLng);
+      distanceToGorevSpan.textContent = `${distance.toFixed(0)} m`;
+    } else if (rocketLat && rocketLng) {
+      // Görev yükü konumu yoksa roket konumunu kullan
+      const distance = calculateDistance(rocketLat, rocketLng, browserLat, browserLng);
+      distanceToGorevSpan.textContent = `${distance.toFixed(0)} m (Roket)`;
+    } else {
+      distanceToGorevSpan.textContent = `0 m`;
+    }
+  } else {
+    distanceToGorevSpan.textContent = `0 m`;
   }
 }
 
@@ -792,8 +862,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // Aviyonik bağlantısı kesildiğinde haritayı tarayıcı konumuna ayarla
         navigator.geolocation.getCurrentPosition(
           function (position) {
-            map.setView([position.coords.latitude, position.coords.longitude], 13);
+            browserLat = position.coords.latitude;
+            browserLng = position.coords.longitude;
+            
+            map.setView([browserLat, browserLng], 13);
             console.log("Aviyonik bağlantısı kesildi, harita tarayıcı konumuna ayarlandı");
+            
+            // Mesafe hesapla ve güncelle
+            if (rocketLat && rocketLng) {
+              const distance = calculateDistance(rocketLat, rocketLng, browserLat, browserLng);
+              distanceToRocketSpan.textContent = `${distance.toFixed(0)} m`;
+            }
+            
+            // Görev yükü mesafesini de güncelle
+            updateGorevDistance();
           },
           function (error) {
             console.error("Konum alınamadı:", error);
@@ -838,9 +920,14 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Görev yükü konumunu güncelle
         if (msg.data.gorev_enlem !== undefined && msg.data.gorev_boylam !== undefined) {
+          gorevLat = msg.data.gorev_enlem;
+          gorevLng = msg.data.gorev_boylam;
           if (gorevLabel) {
-            gorevLabel.setLatLng([msg.data.gorev_enlem, msg.data.gorev_boylam]);
+            gorevLabel.setLatLng([gorevLat, gorevLng]);
           }
+          
+          // Görev yükü mesafesini güncelle
+          updateGorevDistance();
         }
         
         gorevPacketCount++;

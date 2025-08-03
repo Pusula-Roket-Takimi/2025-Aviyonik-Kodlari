@@ -18,9 +18,13 @@ let hyiPort = null;
 let availablePorts = [];
 
 // Hatalı veri sayaci
-
 let aviyonikErrorCount = 0;
 let gorevErrorCount = 0;
+let hyiErrorCount = 0;
+
+// HYİ bağlantı durumu
+let hyiConnected = false;
+let hyiInterval = null;
 
 const floatFields = [
   'basinc_irtifa', // 4 byte
@@ -312,61 +316,157 @@ function sendGorevData(ws, msg) {
 
 // HYİ paket oluşturma
 function floatToBytesLE(floatVal) {
-  let buffer = new ArrayBuffer(4);
-  new DataView(buffer).setFloat32(0, floatVal, true);
-  return Array.from(new Uint8Array(buffer));
+  try {
+    let buffer = new ArrayBuffer(4);
+    new DataView(buffer).setFloat32(0, floatVal, true);
+    return Array.from(new Uint8Array(buffer));
+  } catch (error) {
+    console.error('Float to bytes dönüştürme hatası:', error);
+    return [0, 0, 0, 0];
+  }
 }
 
 let hyiSayac = 0;
 
 function sendHyiData(ws, msg) {
-  if (hyiPort?.isOpen) hyiPort.close();
-
-  hyiPort = new SerialPort({
-    path: msg.data,
-    baudRate: 19200
-  });
-
-  hyiPort.on('open', () => {
-    console.log('HYİ port açıldı:', msg.data);
-    ws.send(JSON.stringify({ type: 'hyi-connected', data: msg.data }));
-    setInterval(() => {
-
-      const packet = new Uint8Array(78);
-      packet.set([0xFF, 0xFF, 0x54, 0x52], 0);  // HEADER
-      packet[4] = TAKIM_ID;
-      packet[5] = hyiSayac;
-
-      let offset = 6;
-      for (let key of floatFields) {
-        const val = parseFloat(HYI_SAF_VERILER[key] || 0);
-        packet.set(floatToBytesLE(val), offset);
-        offset += 4;
+  try {
+    // Önceki bağlantıyı temizle
+    if (hyiPort?.isOpen) {
+      try {
+        hyiPort.close();
+      } catch (error) {
+        console.error('HYİ port kapatma hatası:', error);
       }
+    }
 
-      // Diğer veriler
-      packet[74] = HYI_SAF_VERILER.parasut_durum || 0;
+    // Interval'ı temizle
+    if (hyiInterval) {
+      clearInterval(hyiInterval);
+      hyiInterval = null;
+    }
 
-      let checksum = 0;
-      for (let i = 4; i < 75; i++) checksum += packet[i];
-      packet[75] = checksum % 256;//76
-      packet[76] = 0x0D;//77
-      packet[77] = 0x0A;//78
+    hyiPort = new SerialPort({
+      path: msg.data,
+      baudRate: 19200
+    });
 
-      hyiPort.write(packet, (err) => {
-        hyiSayac = (++hyiSayac) & 0xFF;
-        console.log('HYİ paket gönderildi:', hyiSayac);
-        if (err) {
-          console.error('HYİ gönderim hatası:', err);
-          ws.send(JSON.stringify({ type: 'hyi-send-error', data: err.message }));
-        } else {
-          console.log('HYİ verisi gönderildi, boyut:', packet.length);
-          ws.send(JSON.stringify({ type: 'hyi-sent', data: hyiSayac }));
+    hyiPort.on('open', () => {
+      try {
+        console.log('HYİ port açıldı:', msg.data);
+        hyiConnected = true;
+        ws.send(JSON.stringify({ type: 'hyi-connected', data: msg.data }));
+        
+        hyiInterval = setInterval(() => {
+          try {
+            if (!hyiPort?.isOpen || !hyiConnected) {
+              console.log('HYİ port kapalı, interval durduruluyor');
+              clearInterval(hyiInterval);
+              hyiInterval = null;
+              return;
+            }
+
+            const packet = new Uint8Array(78);
+            packet.set([0xFF, 0xFF, 0x54, 0x52], 0);  // HEADER
+            packet[4] = TAKIM_ID;
+            packet[5] = hyiSayac;
+
+            let offset = 6;
+            for (let key of floatFields) {
+              try {
+                const val = parseFloat(HYI_SAF_VERILER[key] || 0);
+                packet.set(floatToBytesLE(val), offset);
+                offset += 4;
+              } catch (error) {
+                console.error(`HYİ veri dönüştürme hatası (${key}):`, error);
+                packet.set([0, 0, 0, 0], offset);
+                offset += 4;
+              }
+            }
+
+            // Diğer veriler
+            packet[74] = HYI_SAF_VERILER.parasut_durum || 0;
+
+            let checksum = 0;
+            for (let i = 4; i < 75; i++) checksum += packet[i];
+            packet[75] = checksum % 256;
+            packet[76] = 0x0D;
+            packet[77] = 0x0A;
+
+            hyiPort.write(packet, (err) => {
+              try {
+                hyiSayac = (++hyiSayac) & 0xFF;
+                console.log('HYİ paket gönderildi:', hyiSayac);
+                if (err) {
+                  console.error('HYİ gönderim hatası:', err);
+                  hyiErrorCount++;
+                  ws.send(JSON.stringify({ type: 'hyi-send-error', data: err.message }));
+                  ws.send(JSON.stringify({ type: 'hyi-error-count-updated', data: hyiErrorCount }));
+                } else {
+                  console.log('HYİ verisi gönderildi, boyut:', packet.length);
+                  ws.send(JSON.stringify({ type: 'hyi-sent', data: hyiSayac }));
+                }
+              } catch (error) {
+                console.error('HYİ write callback hatası:', error);
+                hyiErrorCount++;
+                ws.send(JSON.stringify({ type: 'hyi-error-count-updated', data: hyiErrorCount }));
+              }
+            });
+
+          } catch (error) {
+            console.error('HYİ interval hatası:', error);
+            hyiErrorCount++;
+            ws.send(JSON.stringify({ type: 'hyi-error-count-updated', data: hyiErrorCount }));
+          }
+        }, 200);
+
+      } catch (error) {
+        console.error('HYİ port açma hatası:', error);
+        hyiErrorCount++;
+        ws.send(JSON.stringify({ type: 'hyi-error', data: error.message }));
+        ws.send(JSON.stringify({ type: 'hyi-error-count-updated', data: hyiErrorCount }));
+      }
+    });
+
+    hyiPort.on('error', (err) => {
+      try {
+        console.error('HYİ port hatası:', err);
+        hyiConnected = false;
+        hyiErrorCount++;
+        ws.send(JSON.stringify({ type: 'hyi-error', data: err.message }));
+        ws.send(JSON.stringify({ type: 'hyi-error-count-updated', data: hyiErrorCount }));
+        
+        // Interval'ı temizle
+        if (hyiInterval) {
+          clearInterval(hyiInterval);
+          hyiInterval = null;
         }
-      });
+      } catch (error) {
+        console.error('HYİ error handler hatası:', error);
+      }
+    });
 
-    }, 200);
-  });
+    hyiPort.on('close', () => {
+      try {
+        console.log('HYİ port kapatıldı');
+        hyiConnected = false;
+        ws.send(JSON.stringify({ type: 'hyi-disconnected' }));
+        
+        // Interval'ı temizle
+        if (hyiInterval) {
+          clearInterval(hyiInterval);
+          hyiInterval = null;
+        }
+      } catch (error) {
+        console.error('HYİ close handler hatası:', error);
+      }
+    });
+
+  } catch (error) {
+    console.error('HYİ bağlantı kurma hatası:', error);
+    hyiErrorCount++;
+    ws.send(JSON.stringify({ type: 'hyi-error', data: error.message }));
+    ws.send(JSON.stringify({ type: 'hyi-error-count-updated', data: hyiErrorCount }));
+  }
 }
 // --- WebSocket bağlantıları ---
 wss.on('connection', (ws) => {
@@ -384,69 +484,93 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    try {
+      switch (msg.type) {
+        case 'refresh-ports':
+          await updateAvailablePorts();
+          ws.send(JSON.stringify({ type: 'ports-updated', data: availablePorts }));
+          break;
+        case 'connect-aviyonik':
+          try {
+            sendAviyonikData(ws, msg);
+          } catch (error) {
+            console.error('Aviyonik bağlantı hatası:', error);
+            ws.send(JSON.stringify({ type: 'aviyonik-error', data: error.message }));
+          }
+          break;
+        case 'connect-gorev':
+          try {
+            sendGorevData(ws, msg);
+          } catch (error) {
+            console.error('Görev Yükü bağlantı hatası:', error);
+            ws.send(JSON.stringify({ type: 'gorev-error', data: error.message }));
+          }
+          break;
+        case 'connect-hyi':
+          try {
+            sendHyiData(ws, msg);
+          } catch (error) {
+            console.error('HYİ bağlantı hatası:', error);
+            ws.send(JSON.stringify({ type: 'hyi-error', data: error.message }));
+          }
+          break;
 
-    switch (msg.type) {
-      case 'refresh-ports':
-        await updateAvailablePorts();
-        ws.send(JSON.stringify({ type: 'ports-updated', data: availablePorts }));
-        break;
-      case 'connect-aviyonik':
-        try {
-          sendAviyonikData(ws, msg);
-        } catch (error) {
-          console.error('Aviyonik bağlantı hatası:', error);
-          ws.send(JSON.stringify({ type: 'aviyonik-error', data: error.message }));
-        }
-        break;
-      case 'connect-gorev':
-        try {
-          sendGorevData(ws, msg);
-        } catch (error) {
-          console.error('Görev Yükü bağlantı hatası:', error);
-          ws.send(JSON.stringify({ type: 'gorev-error', data: error.message }));
-        }
-        break;
-      case 'connect-hyi':
-        try {
-          sendHyiData(ws, msg);
-
-        } catch (error) {
-          console.error('HYİ bağlantı hatası:', error);
-          ws.send(JSON.stringify({ type: 'hyi-error', data: error.message }));
-        }
-        break;
-
-      case 'disconnect-aviyonik':
-        if (aviyonikPort && aviyonikPort.isOpen) {
-          aviyonikPort.close(() => {
-            console.log('Aviyonik port kapatıldı');
-            ws.send(JSON.stringify({ type: 'aviyonik-disconnected' }));
-          });
-        }
-        break;
-      case 'disconnect-gorev':
-        if (gorevPort && gorevPort.isOpen) {
-          gorevPort.close(() => {
-            console.log('Görev Yükü port kapatıldı');
-            ws.send(JSON.stringify({ type: 'gorev-disconnected' }));
-          });
-        }
-        break;
-      case 'disconnect-hyi':
-        if (hyiPort && hyiPort.isOpen) {
-          hyiPort.close(() => {
-            console.log('HYİ port kapatıldı');
-            ws.send(JSON.stringify({ type: 'hyi-disconnected' }));
-          });
-        }
-        break;
-      default:
-        break;
+        case 'disconnect-aviyonik':
+          try {
+            if (aviyonikPort && aviyonikPort.isOpen) {
+              aviyonikPort.close(() => {
+                console.log('Aviyonik port kapatıldı');
+                ws.send(JSON.stringify({ type: 'aviyonik-disconnected' }));
+              });
+            }
+          } catch (error) {
+            console.error('Aviyonik port kapatma hatası:', error);
+          }
+          break;
+        case 'disconnect-gorev':
+          try {
+            if (gorevPort && gorevPort.isOpen) {
+              gorevPort.close(() => {
+                console.log('Görev Yükü port kapatıldı');
+                ws.send(JSON.stringify({ type: 'gorev-disconnected' }));
+              });
+            }
+          } catch (error) {
+            console.error('Görev port kapatma hatası:', error);
+          }
+          break;
+        case 'disconnect-hyi':
+          try {
+            if (hyiPort && hyiPort.isOpen) {
+              hyiPort.close(() => {
+                console.log('HYİ port kapatıldı');
+                ws.send(JSON.stringify({ type: 'hyi-disconnected' }));
+              });
+            }
+            // Interval'ı da temizle
+            if (hyiInterval) {
+              clearInterval(hyiInterval);
+              hyiInterval = null;
+            }
+            hyiConnected = false;
+          } catch (error) {
+            console.error('HYİ port kapatma hatası:', error);
+          }
+          break;
+        default:
+          break;
+      }
+    } catch (error) {
+      console.error('WebSocket mesaj işleme hatası:', error);
     }
   });
 
   ws.on('close', () => {
     console.log('Client bağlantısı koptu');
+  });
+
+  ws.on('error', (error) => {
+    console.error('WebSocket bağlantı hatası:', error);
   });
 });
 
