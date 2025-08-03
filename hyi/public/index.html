@@ -798,7 +798,7 @@ function updateGorevDistance() {
     } else if (rocketLat && rocketLng) {
       // Görev yükü konumu yoksa roket konumunu kullan
       const distance = calculateDistance(rocketLat, rocketLng, browserLat, browserLng);
-      distanceToGorevSpan.textContent = `${distance.toFixed(0)} m (Roket)`;
+      distanceToGorevSpan.textContent = `${distance.toFixed(0)} m`;
     } else {
       distanceToGorevSpan.textContent = `0 m`;
     }
