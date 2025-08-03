@@ -4,7 +4,7 @@
   "description": "Hakem Yer İstasyonu Ve Yer İstasyonu",
   "main": "index.js",
   "author": {
-    "name": "Akif9748"
+    "name": "Akif9748 ve Vakkas1234"
   },
   "scripts": {
     "start": "node index.js"

@@ -19,9 +19,13 @@ function main() {
     }
     
     const camera = new THREE.PerspectiveCamera(45, 2, 0.1, 1000);
-    camera.position.set(400, 300, 400); // Uzaktan görüş
+    camera.position.set(1200, 800, 1200); // Çok daha uzaktan görüş
     const controls = new THREE.OrbitControls(camera, canvas);
-    controls.target.set(0,10, 0); // Roketin tam ortasına odaklan
+    controls.target.set(0, 0, 0); // Roketin merkezine odaklan
+    controls.enableDamping = true; // Yumuşak hareket
+    controls.dampingFactor = 0.05;
+    controls.maxDistance = 2000; // Maksimum zoom mesafesi
+    controls.minDistance = 500; // Minimum zoom mesafesi
     controls.update();
     const scene = new THREE.Scene();
     // Işıklar - Daha yumuşak ve doğal
@@ -35,14 +39,15 @@ function main() {
         objLoader.setMaterials(materials);
         objLoader.load('rocket.obj', function(object) {
             // Modeli merkeze al ve büyüt
-            object.scale.set(3, 3, 3); // Gerekirse bu değeri değiştir
-            // Roket modelini dik yap
+            object.scale.set(2, 2, 2); // Boyutu ayarla
+            
+            // Roket modelini dik yap - görseldeki gibi
             object.rotation.x = THREE.MathUtils.degToRad(-90); // Dik durması için
             object.rotation.y = THREE.MathUtils.degToRad(0); // Y ekseni rotasyonu sıfırla
             object.rotation.z = THREE.MathUtils.degToRad(0); // Z ekseni rotasyonu sıfırla
             
             // Roket modelini ekranın ortasına yerleştir
-            object.position.set(0, 10, 0);
+            object.position.set(0, 0, 0);
             
             // Otomatik ortalama (bounding box ile)
             const box = new THREE.Box3().setFromObject(object);
@@ -58,6 +63,9 @@ function main() {
             camera.aspect = canvas.clientWidth / canvas.clientHeight;
             camera.updateProjectionMatrix();
         }
+        
+        controls.update(); // Controls'u güncelle
+        
         renderer.render(scene, camera);
         requestAnimationFrame(render);
     }
@@ -79,7 +87,7 @@ window.setRocketAngle = function(pitch, yaw, roll) {
         
         // Roket modelini döndür (dik pozisyondan başlayarak)
         // Pitch (X ekseni): Yukarı-aşağı açı - dik pozisyondan başla
-        rocketModel.rotation.x = THREE.MathUtils.degToRad(-90) + currentRotation.x;
+        rocketModel.rotation.x = currentRotation.x;
         // Yaw (Y ekseni): Sağa-sola açı
         rocketModel.rotation.y = currentRotation.y;
         // Roll (Z ekseni): Dönme açısı
