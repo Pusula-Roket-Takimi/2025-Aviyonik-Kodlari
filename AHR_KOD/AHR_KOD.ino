@@ -1,7 +1,7 @@
-#define TESTMODU 1
+//#define TESTMODU 1
 
-//#define ALICI_ADRES 21
-//#define ALICI_KANAL 50
+//#define ALICI_ADRES 97
+//#define ALICI_KANAL 18
 //#define NET_ID 46
 
 
@@ -17,7 +17,7 @@
 
 
 #define MAIN_INTERVAL 100     // Ana Döngü: 10HZ
-#define PATLAMA_SURESI 1500   // SGU EYLEM SÜRESİ
+#define PATLAMA_SURESI 10000   // SGU EYLEM SÜRESİ
 #define LORA_INTERVAL 900     // must= < GPS 1 hz kullanalım
 #define UKBTEST_INTERVAL 100  // 10HZ
 #define GPS_INTERVAL 900      // 1HZ
@@ -75,7 +75,7 @@ Kalman Basinc_Kalman(0.001, 1 * 1 /* tolerans ** 2 */, 1.0 /* arastir */, 0.0);
 Kalman XIvme_Kalman(0.001, 0.1, 1.0, 0.0);
 Kalman YIvme_Kalman(0.001, 0.1, 1.0, 0.0);
 Kalman ZIvme_Kalman(0.001, 0.1, 1.0, 0.0);
-Kalman Irtifa_Kalman(0.001, 0.5, 1.0, 0.0);
+Kalman Irtifa_Kalman(0.001, 1 * 1, 1.0, 0.0);
 Kalman Aci_Kalman(0.001, 0.1, 1.0, 0.0);
 
 
@@ -225,10 +225,30 @@ void SensorVeriOku() {
   // X ve Z'nin yerleri değiştirilmiştir
   RawSensorData.AX = IMU.readFloatAccelZ();
   RawSensorData.AY = IMU.readFloatAccelY();
-  RawSensorData.AZ = IMU.readFloatAccelX(); // kart tersse ters yap bunu mesela
+  RawSensorData.AZ = IMU.readFloatAccelX();  // kart tersse ters yap bunu mesela
   // X ve Z'nin yerleri değiştirilmiştir
 
-  RawSensorData.ACI = atan2(sqrt(RawSensorData.AX * RawSensorData.AX + RawSensorData.AY * RawSensorData.AY), -RawSensorData.AZ) * 180.0 / PI;
+
+  RawSensorData.ACI = fabs(atan2(sqrt(RawSensorData.AX * RawSensorData.AX + RawSensorData.AY * RawSensorData.AY), -RawSensorData.AZ) * 180.0 / PI);
+#ifdef TESTMODU
+
+  Serial.println("=== SENSOR VERISI ===");
+  Serial.print("BASINC (hPa): ");
+  Serial.println(RawSensorData.BASINC, 2);
+  Serial.print("RAMPA_IRTIFA (m): ");
+  Serial.println(RawSensorData.RAMPA_IRTIFA, 2);
+
+  Serial.print("Ivme X (AX): ");
+  Serial.println(RawSensorData.AX, 4);
+  Serial.print("Ivme Y (AY): ");
+  Serial.println(RawSensorData.AY, 4);
+  Serial.print("Ivme Z (AZ): ");
+  Serial.println(RawSensorData.AZ, 4);
+
+  Serial.print("ACI (°): ");
+  Serial.println(RawSensorData.ACI, 2);
+  Serial.println("=====================");
+#endif
 }
 
 
@@ -238,13 +258,16 @@ void KURTARMA(float aci, float irtifa) {
   unsigned long new_millis = millis();
 
   irtifa_kosul = (irtifa < eski_irtifa);
-
   if (new_millis - irtifa_millis >= 100) {
     irtifa_millis = new_millis;
     eski_irtifa = irtifa;
   }
 
-  aci_kosul = aci > 60;
+  aci_kosul = aci > 45;
+
+#ifdef TESTMODU
+  Serial.println(aci);
+#endif
 
   bool kosul = (aci_kosul && irtifa_kosul);
 
@@ -341,7 +364,7 @@ void MAX3232_Dinle() {
     }
 
 
-    uint8_t kafa = MAX3232Serial.read(); // i++ gidebilir tek kafa kullanımı olabilir
+    uint8_t kafa = MAX3232Serial.read();  // i++ gidebilir tek kafa kullanımı olabilir
     if (kafa != HEADER)
       break;
 
@@ -443,7 +466,7 @@ void SITAlgoritma(void* pvParameters) {
     float yms2 = YIvme_Kalman.X * GRAVITY;
     float zms2 = ZIvme_Kalman.X * GRAVITY;
 
-    float yAngle = atan2(YIvme_Kalman.X, -ZIvme_Kalman.X) * 180 / PI;                                                            // roll
+    float yAngle = atan2(YIvme_Kalman.X, -ZIvme_Kalman.X) * 180 / PI;                                                           // roll
     float xAngle = atan2(-XIvme_Kalman.X, sqrt(YIvme_Kalman.X * YIvme_Kalman.X + ZIvme_Kalman.X * ZIvme_Kalman.X)) * 180 / PI;  // pitch
     float zAngle = 0;                                                                                                           // yaw degistirme dusuncem yok teknofest
     //////////////////////////////////////////////////////////////////////////////// SIT'e Özel Veriler
