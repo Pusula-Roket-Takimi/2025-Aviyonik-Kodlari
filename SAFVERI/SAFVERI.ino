@@ -42,6 +42,7 @@ float basinc_Irtifa;
 
 // Setup Fonksiyonu
 void setup(){
+    Serial.begin(115200);
     pinMode(BUZZER,OUTPUT);
     pinMode(PATLAMAK,OUTPUT);
     digitalWrite(BUZZER,HIGH);
