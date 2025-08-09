@@ -217,18 +217,6 @@
   </div>
 </div>
 
-<h2>İstatistikler</h2>
-<div style="display: flex; gap: 20px; margin-bottom: 20px;">
-  <div>Aviyonik Paketi: <span id="aviyonikCount">0</span></div>
-  <div>Görev Yükü Paketi: <span id="gorevCount">0</span></div>
-  <div>HYİ Gönderildi: <span id="hyiCount">0</span></div>
-  <div>Aviyonik Hatalı Veri: <span id="aviyonikErrorCount">0</span></div>
-  <div>Görev Yükü Hatalı Veri: <span id="gorevErrorCount">0</span></div>
-</div>
-
-<h2>Log</h2>
-<div id="log"></div>
-
 <h2>Kaydedilen Veriler</h2>
 <div class="connection-group">
   <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
@@ -241,6 +229,7 @@
     <table id="savedDataTable">
       <thead>
         <tr>
+          <th>#</th>
           <th>Zaman</th>
           <th>Enlem</th>
           <th>Boylam</th>
@@ -254,6 +243,18 @@
     </table>
   </div>
 </div>
+
+<h2>İstatistikler</h2>
+<div style="display: flex; gap: 20px; margin-bottom: 20px;">
+  <div>Aviyonik Paketi: <span id="aviyonikCount">0</span></div>
+  <div>Görev Yükü Paketi: <span id="gorevCount">0</span></div>
+  <div>HYİ Gönderildi: <span id="hyiCount">0</span></div>
+  <div>Aviyonik Hatalı Veri: <span id="aviyonikErrorCount">0</span></div>
+  <div>Görev Yükü Hatalı Veri: <span id="gorevErrorCount">0</span></div>
+</div>
+
+<h2>Log</h2>
+<div id="log"></div>
 
 <script>
 const socket = new WebSocket(`ws://${location.host}`);
@@ -276,10 +277,9 @@ let gorevErrorCount = 0;
 
 // Harita için değişkenler
 let map, rocketMarker, aviyonikLabel, gorevLabel;
-
-let rocketLat = 38.3726, rocketLng = 34.0254; // Aksaray koordinatları (varsayılan)
+let rocketLat = 37.583791232901596, rocketLng = 36.86079511351165; // Maraş koordinatları (varsayılan)
 let browserLat = null, browserLng = null; // Tarayıcı konumu
-let gorevLat = 38.3726, gorevLng = 34.0254; // Görev yükü konumu (başlangıçta roket ile aynı)
+let gorevLat = 37.58404828980637, gorevLng = 36.860294950190365; // Maraş  konumu
 
 // Grafikler için değişkenler
 let irtifaChart, aciChart, basincChart;
@@ -354,13 +354,34 @@ async function loadGorevData() {
       
       if (result.data.length === 0) {
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="7" style="text-align: center; color: #aaa;">Henüz veri kaydedilmemiş</td>';
+        tr.innerHTML = '<td colspan="8" style="text-align: center; color: #aaa;">Henüz veri kaydedilmemiş</td>';
         savedDataTableBody.appendChild(tr);
       } else {
-        result.data.forEach(veri => {
+        result.data.forEach((veri, index) => {
           const tr = document.createElement('tr');
-          const time = new Date(veri.timestamp).toLocaleTimeString();
+          // Zaman formatını düzelt - eğer timestamp varsa onu kullan, yoksa şu anki zamanı kullan
+          let time;
+          if (veri.timestamp) {
+            time = new Date(veri.timestamp).toLocaleString('tr-TR', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit'
+            });
+          } else {
+            time = new Date().toLocaleString('tr-TR', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit'
+            });
+          }
           tr.innerHTML = `
+            <td>${index + 1}</td>
             <td>${time}</td>
             <td>${veri.gorev_enlem.toFixed(6)}</td>
             <td>${veri.gorev_boylam.toFixed(6)}</td>
@@ -413,7 +434,7 @@ async function clearGorevData() {
       log('Dosya temizlendi: ' + result.message);
       savedDataTableBody.innerHTML = '';
       const tr = document.createElement('tr');
-      tr.innerHTML = '<td colspan="7" style="text-align: center; color: #aaa;">Henüz veri kaydedilmemiş</td>';
+      tr.innerHTML = '<td colspan="8" style="text-align: center; color: #aaa;">Henüz veri kaydedilmemiş</td>';
       savedDataTableBody.appendChild(tr);
       updateFileInfo();
     } else {
@@ -632,8 +653,8 @@ function initMap() {
     console.log('Aviyonik konumuna gidildi');
   });
   
-  // Görev yükü konum etiketi
-  gorevLabel = L.marker([rocketLat, rocketLng], {
+  // Görev yükü konum etiketi - başlangıçta görünür ama farklı konumda
+  gorevLabel = L.marker([rocketLat + 0.001, rocketLng + 0.001], {
     icon: L.divIcon({
       className: 'gorev-label',
       html: '<div style="background: rgba(0, 255, 0, 0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; white-space: nowrap; cursor: pointer;">GÖREV YÜKÜ</div>',
@@ -641,6 +662,8 @@ function initMap() {
       iconAnchor: [40, 10]
     })
   }).addTo(map);
+  
+  // Başlangıçta görev yükü label'ını görünür yap ama farklı konumda
   
   // Görev yükü etiketine tıklama olayı
   gorevLabel.on('click', function() {
@@ -709,21 +732,21 @@ function updateRocketVisualization(data) {
   // Sadece aviyonik verilerinden al
   if (data.aci !== undefined && data.ivme_x !== undefined && data.ivme_y !== undefined && data.ivme_z !== undefined) {
     rocketAngle = data.aci;
-    aci = rocketAngle;
+    //aci = rocketAngle;
     
-    // İvme verilerinden açıları hesapla
-    // Pitch (X ekseni) - yukarı-aşağı açı
+    // İvme verilerinden açıları hesapla - aviyonik sistem dik durduğu için
+    // Pitch (X ekseni) - yukarı-aşağı açı (dik pozisyondan)
     const pitch = Math.atan2(-data.ivme_x, Math.sqrt(data.ivme_y * data.ivme_y + data.ivme_z * data.ivme_z)) * 180 / Math.PI;
     
-    // Yaw (Y ekseni) - sağa-sola açı
+    // Yaw (Y ekseni) - sağa-sola açı (dik pozisyondan)
     const yaw = Math.atan2(data.ivme_y, data.ivme_z) * 180 / Math.PI;
     
-    
-    const roll =0
+    // Roll (Z ekseni) - dönme açısı (dik pozisyondan)
+    const roll = 0; // Şimdilik 0, gerekirse hesaplanabilir
     
     rocketAngleSpan.textContent = `${rocketAngle.toFixed(1)}°`;
     
-    // three.js modelini döndür
+    // three.js modelini döndür - aviyonik sistem dik durduğu için
     if (window.setRocketAngle) {
       window.setRocketAngle(pitch, yaw, roll);
     }
@@ -756,10 +779,9 @@ function updateRocketVisualization(data) {
     
     if (rocketMarker) {
       rocketMarker.setLatLng([rocketLat, rocketLng]);
-      // Aviyonik etiketini roket konumuna yerleştir
+      // Sadece aviyonik etiketini roket konumuna yerleştir
       aviyonikLabel.setLatLng([rocketLat, rocketLng]);
-      // Görev yükü etiketini roket konumuna yerleştir
-      gorevLabel.setLatLng([rocketLat, rocketLng]);
+      // Görev yükü etiketi kendi konumunda kalacak (updateRocketVisualization'da değiştirme)
       map.setView([rocketLat, rocketLng]);
     }
   }

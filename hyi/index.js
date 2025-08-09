@@ -100,6 +100,8 @@ app.get('/api/gorev-verileri', (req, res) => {
       const lines = data.trim().split('\n');
       const veriler = lines.map(line => {
         const values = line.split(' ');
+        // Son değer timestamp, diğerleri veri
+        const timestamp = values.length > 6 ? values[6] : new Date().toISOString();
         return {
           gorev_enlem: parseFloat(values[0]) || 0,
           gorev_boylam: parseFloat(values[1]) || 0,
@@ -107,7 +109,7 @@ app.get('/api/gorev-verileri', (req, res) => {
           basinc: parseFloat(values[3]) || 0,
           yogunluk: parseFloat(values[4]) || 0,
           sicaklik: parseFloat(values[5]) || 0,
-          timestamp: new Date().toISOString()
+          timestamp: timestamp
         };
       });
       res.json({ success: true, data: veriler });
@@ -299,9 +301,10 @@ function sendGorevData(ws, msg) {
 
       ws.send(JSON.stringify({ type: 'gorev-data', data: veri }));
 
-
+      // Veriyi dosyaya kaydet (timestamp ile birlikte)
+      const timestamp = new Date().toISOString();
       const veriArray = GOREV_FIELDS.map(field => veri[field.key]);
-      const veriString = veriArray.join(' ') + '\n';
+      const veriString = `${veriArray.join(' ')} ${timestamp}\n`;
       fs.appendFile('gorev_verileri.txt', veriString, (err) => {
         if (err) {
           console.error('Dosyaya yazma hatası:', err);
