@@ -1,5 +1,8 @@
 let rocketModel = null;
 let currentRotation = { x: 0, y: 0, z: 0 };
+let baseQuaternion = null; // Modelin başlangıç (dik) yönelimi
+let calibrationQuaternion = new THREE.Quaternion(); // Kullanıcı kalibrasyonu
+let lastEulerForCalib = { roll: 0, pitch: 0, yaw: 0 }; // Son açıları hatırla
 
 function main() {
     const canvas = document.getElementById('3dModelCanvas');
@@ -47,9 +50,9 @@ function main() {
             object.scale.set(2, 2, 2); // Boyutu ayarla
             
             // Roket modelini dik yap - aviyonik sistem dik durduğu için
-            object.rotation.x = THREE.MathUtils.degToRad(-90); // Dik pozisyon - X ekseni rotasyonu sıfırla
-            object.rotation.y = THREE.MathUtils.degToRad(0); // Y ekseni rotasyonu sıfırla
-            object.rotation.z = THREE.MathUtils.degToRad(0); // Z ekseni rotasyonu sıfırla
+            object.rotation.x = THREE.MathUtils.degToRad(-90);
+            object.rotation.y = THREE.MathUtils.degToRad(0);
+            object.rotation.z = THREE.MathUtils.degToRad(0);
             
             // Roket modelini ekranın ortasına yerleştir
             object.position.set(0, 0, 0);
@@ -63,6 +66,8 @@ function main() {
             object.position.y = 50;
             
             rocketModel = object; // ⭐ Önemli: Global referans
+            rocketModel.rotation.order = 'ZYX'; // Havacılık sırası: yaw(Z) → pitch(Y) → roll(X)
+            baseQuaternion = rocketModel.quaternion.clone(); // Temel yönelimi kaydet
             scene.add(object);
         });
     });
@@ -84,25 +89,43 @@ function main() {
 
 // Roket açısını ayarlama fonksiyonu
 window.setRocketAngle = function(pitch, yaw, roll) {
-    if (rocketModel) {
+    if (rocketModel && baseQuaternion) {
         // Açıları radyana çevir
         const pitchRad = THREE.MathUtils.degToRad(pitch);
         const yawRad = THREE.MathUtils.degToRad(yaw);
         const rollRad = THREE.MathUtils.degToRad(roll);
-        
-        // Mevcut rotasyonu güncelle - aviyonik sistem dik durduğu için
-        currentRotation.x = pitchRad;  // Pitch: Yukarı-aşağı açı
-        currentRotation.y = yawRad;    // Yaw: Sağa-sola açı
-        currentRotation.z = rollRad;   // Roll: Dönme açısı
-        
-        // Roket modelini döndür (dik pozisyondan başlayarak)
-        // Aviyonik sistem dik durduğu için rotasyonları doğrudan uygula
-        rocketModel.rotation.x = currentRotation.x;
-        rocketModel.rotation.y = currentRotation.y;
-        rocketModel.rotation.z = currentRotation.z;
-        
-        console.log(`Roket döndürüldü - Pitch: ${pitch.toFixed(1)}°, Yaw: ${yaw.toFixed(1)}°, Roll: ${roll.toFixed(1)}°`);
+
+        // Havacılık konvansiyonu: yaw(Z), pitch(Y), roll(X)
+        // Not: Euler açılarının uygulanma sırası önemlidir.
+        const euler = new THREE.Euler(rollRad, pitchRad, yawRad, 'ZYX');
+        const q = new THREE.Quaternion().setFromEuler(euler);
+
+        // Başlangıç (dik) yönelimin üzerine uygula
+        rocketModel.quaternion.copy(baseQuaternion).multiply(calibrationQuaternion).multiply(q);
+
+        currentRotation.x = rollRad;
+        currentRotation.y = pitchRad;
+        currentRotation.z = yawRad;
+        lastEulerForCalib = { roll: rollRad, pitch: pitchRad, yaw: yawRad };
     }
 };
+
+// Klavye ile kalibrasyon: C ile anlık yönelimi nötr yap, R ile sıfırla
+window.addEventListener('keydown', (e) => {
+    if (!rocketModel || !baseQuaternion) return;
+    if (e.key === 'c' || e.key === 'C') {
+        const qNow = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+            lastEulerForCalib.roll,
+            lastEulerForCalib.pitch,
+            lastEulerForCalib.yaw,
+            'ZYX'
+        ));
+        calibrationQuaternion.copy(qNow).invert();
+        console.log('Kalibrasyon uygulandı (C).');
+    } else if (e.key === 'r' || e.key === 'R') {
+        calibrationQuaternion.identity();
+        console.log('Kalibrasyon sıfırlandı (R).');
+    }
+});
 
 window.addEventListener('DOMContentLoaded', main); 
