@@ -99,17 +99,14 @@ app.get('/api/gorev-verileri', (req, res) => {
       const data = fs.readFileSync('gorev_verileri.txt', 'utf8');
       const lines = data.trim().split('\n');
       const veriler = lines.map(line => {
-        const values = line.split(' ');
-        // Son değer timestamp, diğerleri veri
-        const timestamp = values.length > 6 ? values[6] : new Date().toISOString();
+        const values = line.trim().split(/\s+/);
         return {
           gorev_enlem: parseFloat(values[0]) || 0,
           gorev_boylam: parseFloat(values[1]) || 0,
           gorev_irtifa: parseFloat(values[2]) || 0,
           basinc: parseFloat(values[3]) || 0,
           yogunluk: parseFloat(values[4]) || 0,
-          sicaklik: parseFloat(values[5]) || 0,
-          timestamp: timestamp
+          sicaklik: parseFloat(values[5]) || 0
         };
       });
       res.json({ success: true, data: veriler });
@@ -152,6 +149,81 @@ app.get('/api/gorev-verileri/size', (req, res) => {
     }
   } catch (error) {
     console.error('Dosya boyutu kontrol hatası:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Saf veri log'u için endpoint'ler
+app.get('/api/saf-veri-log', (req, res) => {
+  try {
+    if (fs.existsSync('saf_veri_log.txt')) {
+      const data = fs.readFileSync('saf_veri_log.txt', 'utf8');
+      const lines = data.trim().split('\n');
+      const veriler = lines.map(line => {
+        const values = line.trim().split(/\s+/);
+        return {
+          // Aviyonik verileri
+          roket_enlem: parseFloat(values[0]) || 0,
+          roket_boylam: parseFloat(values[1]) || 0,
+          roket_irtifa: parseFloat(values[2]) || 0,
+          basinc: parseFloat(values[3]) || 0,
+          basinc_irtifa: parseFloat(values[4]) || 0,
+          ivme_x: parseFloat(values[5]) || 0,
+          ivme_y: parseFloat(values[6]) || 0,
+          ivme_z: parseFloat(values[7]) || 0,
+          jiroskop_x: parseFloat(values[8]) || 0,
+          jiroskop_y: parseFloat(values[9]) || 0,
+          jiroskop_z: parseFloat(values[10]) || 0,
+          aci: parseFloat(values[11]) || 0,
+          parasut_durum: parseInt(values[12]) || 0,
+          // Görev yükü verileri
+          gorev_enlem: parseFloat(values[13]) || 0,
+          gorev_boylam: parseFloat(values[14]) || 0,
+          gorev_irtifa: parseFloat(values[15]) || 0,
+          yogunluk: parseFloat(values[16]) || 0,
+          sicaklik: parseFloat(values[17]) || 0
+        };
+      });
+      res.json({ success: true, data: veriler });
+    } else {
+      res.json({ success: true, data: [] });
+    }
+  } catch (error) {
+    console.error('Saf veri log okuma hatası:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Saf veri log dosyasını temizlemek için endpoint
+app.delete('/api/saf-veri-log', (req, res) => {
+  try {
+    if (fs.existsSync('saf_veri_log.txt')) {
+      fs.unlinkSync('saf_veri_log.txt');
+      res.json({ success: true, message: 'Saf veri log dosyası silindi' });
+    } else {
+      res.json({ success: true, message: 'Saf veri log dosyası zaten yok' });
+    }
+  } catch (error) {
+    console.error('Saf veri log dosyası silme hatası:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Saf veri log dosya boyutunu kontrol etmek için endpoint
+app.get('/api/saf-veri-log/size', (req, res) => {
+  try {
+    if (fs.existsSync('saf_veri_log.txt')) {
+      const stats = fs.statSync('saf_veri_log.txt');
+      res.json({ 
+        success: true, 
+        size: stats.size,
+        lines: fs.readFileSync('saf_veri_log.txt', 'utf8').split('\n').length - 1
+      });
+    } else {
+      res.json({ success: true, size: 0, lines: 0 });
+    }
+  } catch (error) {
+    console.error('Saf veri log dosya boyutu kontrol hatası:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -235,6 +307,9 @@ function sendAviyonikData(ws, msg) {
       for (const key in veri)
         HYI_SAF_VERILER[key] = veri[key];
 
+      // Saf veri log'una yaz
+      writeSafVeriLog();
+
       ws.send(JSON.stringify({ type: 'aviyonik-data', data: veri }));
     }
 
@@ -301,21 +376,66 @@ function sendGorevData(ws, msg) {
 
       ws.send(JSON.stringify({ type: 'gorev-data', data: veri }));
 
-      // Veriyi dosyaya kaydet (timestamp ile birlikte)
-      const timestamp = new Date().toISOString();
+      // Veriyi dosyaya kaydet
       const veriArray = GOREV_FIELDS.map(field => veri[field.key]);
-      const veriString = `${veriArray.join(' ')} ${timestamp}\n`;
+      const veriString = `${veriArray.join(' ')}\n`;
       fs.appendFile('gorev_verileri.txt', veriString, (err) => {
         if (err) {
           console.error('Dosyaya yazma hatası:', err);
         }
       });
+
+      // Saf veri log'una yaz
+      writeSafVeriLog();
     }
   });
 }
 
 
 
+
+// Saf veri log yazma fonksiyonu
+function writeSafVeriLog() {
+  try {
+    // Aviyonik verileri (13 alan)
+    const aviyonikVeriler = [
+      HYI_SAF_VERILER.roket_enlem || 0,
+      HYI_SAF_VERILER.roket_boylam || 0,
+      HYI_SAF_VERILER.roket_irtifa || 0,
+      HYI_SAF_VERILER.basinc || 0,
+      HYI_SAF_VERILER.basinc_irtifa || 0,
+      HYI_SAF_VERILER.ivme_x || 0,
+      HYI_SAF_VERILER.ivme_y || 0,
+      HYI_SAF_VERILER.ivme_z || 0,
+      HYI_SAF_VERILER.jiroskop_x || 0,
+      HYI_SAF_VERILER.jiroskop_y || 0,
+      HYI_SAF_VERILER.jiroskop_z || 0,
+      HYI_SAF_VERILER.aci || 0,
+      HYI_SAF_VERILER.parasut_durum || 0
+    ];
+    
+    // Görev yükü verileri (5 alan)
+    const gorevVeriler = [
+      HYI_SAF_VERILER.gorev_enlem || 0,
+      HYI_SAF_VERILER.gorev_boylam || 0,
+      HYI_SAF_VERILER.gorev_irtifa || 0,
+      HYI_SAF_VERILER.yogunluk || 0,
+      HYI_SAF_VERILER.sicaklik || 0
+    ];
+    
+    // Tüm verileri birleştir
+    const tumVeriler = [...aviyonikVeriler, ...gorevVeriler];
+    const veriString = tumVeriler.join(' ') + '\n';
+    
+    fs.appendFile('saf_veri_log.txt', veriString, (err) => {
+      if (err) {
+        console.error('Saf veri log yazma hatası:', err);
+      }
+    });
+  } catch (error) {
+    console.error('Saf veri log yazma hatası:', error);
+  }
+}
 
 // HYİ paket oluşturma
 function floatToBytesLE(floatVal) {
