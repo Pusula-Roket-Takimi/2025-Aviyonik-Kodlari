@@ -112,6 +112,7 @@ window.setRocketAngle = function(pitch, yaw, roll) {
 
 // Klavye ile kalibrasyon: C ile anlık yönelimi nötr yap, R ile sıfırla
 window.addEventListener('keydown', (e) => {
+    
     if (!rocketModel || !baseQuaternion) return;
     if (e.key === 'c' || e.key === 'C') {
         const qNow = new THREE.Quaternion().setFromEuler(new THREE.Euler(
