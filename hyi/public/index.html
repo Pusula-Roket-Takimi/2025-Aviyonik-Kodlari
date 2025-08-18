@@ -220,7 +220,44 @@
 <h2>Kaydedilen Veriler</h2>
 <div class="connection-group">
   <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-    <h3> Bilimsel Görev Yükü Verileri</h3>
+    <h3>Saf Veri Logu</h3>
+    <button class="refresh-btn" id="loadSafVeriLogBtn">Verileri Yükle</button>
+    <button class="refresh-btn" id="clearSafVeriLogBtn" style="background: #dc3545;">Dosyayı Temizle</button>
+    <span id="safVeriLogFileInfo" style="margin-left: 10px; color: #aaa;"></span>
+  </div>
+  <div class="table-container" id="safVeriLogTableContainer">
+    <table id="safVeriLogTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Roket Enlem</th>
+          <th>Roket Boylam</th>
+          <th>Roket İrtifa</th>
+          <th>Basınç</th>
+          <th>Basınç İrtifa</th>
+          <th>İvme X</th>
+          <th>İvme Y</th>
+          <th>İvme Z</th>
+          <th>Jiroskop X</th>
+          <th>Jiroskop Y</th>
+          <th>Jiroskop Z</th>
+          <th>Açı</th>
+          <th>Paraşüt</th>
+          <th>Görev Enlem</th>
+          <th>Görev Boylam</th>
+          <th>Görev İrtifa</th>
+          <th>Yoğunluk</th>
+          <th>Sıcaklık</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="connection-group">
+  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+    <h3> Bilimsel Görev Yükü Veri Logu</h3>
     <button class="refresh-btn" id="loadGorevDataBtn">Verileri Yükle</button>
     <button class="refresh-btn" id="clearGorevDataBtn" style="background: #dc3545;">Dosyayı Temizle</button>
     <span id="fileInfo" style="margin-left: 10px; color: #aaa;"></span>
@@ -230,7 +267,6 @@
       <thead>
         <tr>
           <th>#</th>
-          <th>Zaman</th>
           <th>Enlem</th>
           <th>Boylam</th>
           <th>İrtifa</th>
@@ -294,6 +330,8 @@ const gorevStatus = document.getElementById('gorevStatus');
 const hyiStatus = document.getElementById('hyiStatus');
 const savedDataTableBody = document.querySelector('#savedDataTable tbody');
 const fileInfoSpan = document.getElementById('fileInfo');
+const safVeriLogTableBody = document.querySelector('#safVeriLogTable tbody');
+const safVeriLogFileInfoSpan = document.getElementById('safVeriLogFileInfo');
 
 const aviyonikPortSelect = document.getElementById('aviyonikPortSelect');
 const gorevPortSelect = document.getElementById('gorevPortSelect');
@@ -360,29 +398,8 @@ async function loadGorevData() {
         result.data.forEach((veri, index) => {
           const tr = document.createElement('tr');
           // Zaman formatını düzelt - eğer timestamp varsa onu kullan, yoksa şu anki zamanı kullan
-          let time;
-          if (veri.timestamp) {
-            time = new Date(veri.timestamp).toLocaleString('tr-TR', {
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit'
-            });
-          } else {
-            time = new Date().toLocaleString('tr-TR', {
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit'
-            });
-          }
           tr.innerHTML = `
             <td>${index + 1}</td>
-            <td>${time}</td>
             <td>${veri.gorev_enlem.toFixed(6)}</td>
             <td>${veri.gorev_boylam.toFixed(6)}</td>
             <td>${veri.gorev_irtifa.toFixed(2)} m</td>
@@ -442,6 +459,90 @@ async function clearGorevData() {
     }
   } catch (error) {
     log('Dosya temizleme hatası: ' + error.message);
+  }
+}
+
+// Saf veri log yükleme fonksiyonu
+async function loadSafVeriLog() {
+  try {
+    const response = await fetch('/api/saf-veri-log');
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        safVeriLogTableBody.innerHTML = '';
+        if (result.data.length > 0) {
+          result.data.forEach((veri, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>${index + 1}</td>
+              <td>${veri.roket_enlem.toFixed(6)}</td>
+              <td>${veri.roket_boylam.toFixed(6)}</td>
+              <td>${veri.roket_irtifa.toFixed(2)} m</td>
+              <td>${veri.basinc.toFixed(2)} hPa</td>
+              <td>${veri.basinc_irtifa.toFixed(2)} m</td>
+              <td>${veri.ivme_x.toFixed(3)} m/s²</td>
+              <td>${veri.ivme_y.toFixed(3)} m/s²</td>
+              <td>${veri.ivme_z.toFixed(3)} m/s²</td>
+              <td>${veri.jiroskop_x.toFixed(3)} °/s</td>
+              <td>${veri.jiroskop_y.toFixed(3)} °/s</td>
+              <td>${veri.jiroskop_z.toFixed(3)} °/s</td>
+              <td>${veri.aci.toFixed(2)}°</td>
+              <td>${veri.parasut_durum}</td>
+              <td>${veri.gorev_enlem.toFixed(6)}</td>
+              <td>${veri.gorev_boylam.toFixed(6)}</td>
+              <td>${veri.gorev_irtifa.toFixed(2)} m</td>
+              <td>${veri.yogunluk.toFixed(3)} kg/m³</td>
+              <td>${veri.sicaklik.toFixed(2)}°C</td>
+            `;
+            safVeriLogTableBody.appendChild(row);
+          });
+          log(`Saf veri log yüklendi: ${result.data.length} kayıt`);
+        } else {
+          log('Saf veri log dosyası boş');
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Saf veri log yükleme hatası:', error);
+    log('Saf veri log yükleme hatası: ' + error.message);
+  }
+}
+
+// Saf veri log dosya boyutu kontrolü
+async function checkSafVeriLogFileSize() {
+  try {
+    const response = await fetch('/api/saf-veri-log/size');
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        const sizeKB = (result.size / 1024).toFixed(2);
+        safVeriLogFileInfoSpan.textContent = `${result.lines} kayıt, ${sizeKB} KB`;
+      }
+    }
+  } catch (error) {
+    console.error('Saf veri log dosya boyutu kontrol hatası:', error);
+  }
+}
+
+// Saf veri log temizleme fonksiyonu
+async function clearSafVeriLog() {
+  if (!confirm('Saf veri log dosyasındaki tüm veriler silinecek. Emin misiniz?')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/saf-veri-log', { method: 'DELETE' });
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        log('Saf veri log dosyası temizlendi');
+        safVeriLogTableBody.innerHTML = '';
+        safVeriLogFileInfoSpan.textContent = '';
+      }
+    }
+  } catch (error) {
+    console.error('Saf veri log temizleme hatası:', error);
+    log('Saf veri log temizleme hatası: ' + error.message);
   }
 }
 
@@ -837,6 +938,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Dosya bilgilerini güncelle
   updateFileInfo();
+  checkSafVeriLogFileSize();
   
   socket.addEventListener('open', () => {
     log('Sunucuya bağlanıldı');
@@ -1073,6 +1175,16 @@ document.getElementById('loadGorevDataBtn').addEventListener('click', () => {
 
 document.getElementById('clearGorevDataBtn').addEventListener('click', () => {
   clearGorevData();
+});
+
+// Saf veri log için event listener'lar
+document.getElementById('loadSafVeriLogBtn').addEventListener('click', () => {
+  loadSafVeriLog();
+  checkSafVeriLogFileSize();
+});
+
+document.getElementById('clearSafVeriLogBtn').addEventListener('click', () => {
+  clearSafVeriLog();
 });
 
 // Parsing fonksiyonları
