@@ -833,7 +833,7 @@ function updateRocketVisualization(data) {
   // Sadece aviyonik verilerinden al
   if (data.aci !== undefined && data.ivme_x !== undefined && data.ivme_y !== undefined && data.ivme_z !== undefined) {
     rocketAngle = data.aci;
-    //aci = rocketAngle;
+    aci = rocketAngle;
     
     // İvme verilerinden açıları hesapla - aviyonik sistem dik durduğu için
     // Pitch (X ekseni) - yukarı-aşağı açı (dik pozisyondan)
@@ -887,9 +887,7 @@ function updateRocketVisualization(data) {
     }
   }
   
-  // Mesafe hesapla
-  const distance = calculateDistance(rocketLat, rocketLng, position.coords.latitude, position.coords.longitude);
-  distanceToRocketSpan.textContent = `${distance.toFixed(0)} m`;
+  // Mesafe hesaplama zaten yukarıda browserLat/browserLng ile yapılıyor
   
   // Grafiklere veri ekle (sadece aviyonik verilerinden)
   if (irtifa > 0 || aci !== 0 || basinc > 0) {
