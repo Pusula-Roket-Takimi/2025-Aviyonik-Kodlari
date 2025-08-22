@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pusula Roket Takımı - Giriş</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #000000;
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: #111111;
+            border: 1px solid #333333;
+            border-radius: 8px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .logo-container {
+            margin-bottom: 30px;
+        }
+
+        .logo-image {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 20px;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+
+        .logo-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .team-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #ffffff;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #888888;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: normal;
+            color: #cccccc;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #333333;
+            border-radius: 4px;
+            background: #222222;
+            color: #ffffff;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #666666;
+            background: #2a2a2a;
+        }
+
+        .form-group input::placeholder {
+            color: #666666;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: #333333;
+            color: #ffffff;
+            border: 1px solid #444444;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .login-btn:hover {
+            background: #444444;
+        }
+
+        .login-btn:active {
+            background: #2a2a2a;
+        }
+
+        .error-message {
+            color: #ff6b6b;
+            font-size: 13px;
+            margin-top: 15px;
+            display: none;
+            padding: 8px;
+            background: rgba(255, 107, 107, 0.1);
+            border-radius: 4px;
+            border: 1px solid rgba(255, 107, 107, 0.3);
+        }
+
+        .success-message {
+            color: #4ecdc4;
+            font-size: 13px;
+            margin-top: 15px;
+            display: none;
+            padding: 8px;
+            background: rgba(78, 205, 196, 0.1);
+            border-radius: 4px;
+            border: 1px solid rgba(78, 205, 196, 0.3);
+        }
+
+        /* Responsive tasarım */
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 30px 25px;
+            }
+            
+            .team-name {
+                font-size: 20px;
+            }
+            
+            .logo-image {
+                width: 100px;
+                height: 100px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo-container">
+            <div class="logo-image">
+                <img src="pusulalog.jpeg" alt="Pusula Roket Takımı Logo">
+            </div>
+            <div class="team-name">Pusula Roket Takımı</div>
+            <div class="subtitle">Yer İstasyonu Giriş Ekranı</div>
+        </div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Kullanıcı adınızı giriniz:</label>
+                <input type="text" id="username" name="username" placeholder="Kullanıcı adı" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Şifrenizi Giriniz:</label>
+                <input type="password" id="password" name="password" placeholder="Şifre" required>
+            </div>
+
+            <button type="submit" class="login-btn">Giriş Yap</button>
+        </form>
+
+        <div id="errorMessage" class="error-message"></div>
+        <div id="successMessage" class="success-message"></div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const errorMessage = document.getElementById('errorMessage');
+            const successMessage = document.getElementById('successMessage');
+            
+            // Hata mesajlarını temizle
+            errorMessage.style.display = 'none';
+            successMessage.style.display = 'none';
+            
+            // Debug için konsola yazdır
+            console.log('Girilen kullanıcı adı:', username);
+            console.log('Girilen şifre:', password);
+            console.log('Kullanıcı adı uzunluğu:', username.length);
+            console.log('Şifre uzunluğu:', password.length);
+            
+            // Kullanıcı adı ve şifre kontrolü
+            if (username === 'Vakkas' && password === 'Akif9748') {
+                // Başarılı giriş
+                successMessage.textContent = 'Giriş başarılı! Yönlendiriliyorsunuz...';
+                successMessage.style.display = 'block';
+                
+                // Session storage'a giriş durumunu kaydet
+                sessionStorage.setItem('isLoggedIn', 'true');
+                sessionStorage.setItem('username', username);
+                
+                // 2 saniye sonra ana sayfaya yönlendir
+                setTimeout(function() {
+                    window.location.href = '/dashboard';
+                }, 2000);
+            } else {
+                // Hatalı giriş
+                errorMessage.textContent = 'Kullanıcı adı veya şifre hatalı!';
+                errorMessage.style.display = 'block';
+                
+                // Şifre alanını temizle
+                document.getElementById('password').value = '';
+            }
+        });
+
+        // Sayfa yüklendiğinde giriş kontrolü
+        window.addEventListener('load', function() {
+            const isLoggedIn = sessionStorage.getItem('isLoggedIn');
+            if (isLoggedIn === 'true') {
+                // Zaten giriş yapılmışsa ana sayfaya yönlendir
+                window.location.href = '/dashboard';
+            }
+        });
+    </script>
+</body>
+</html>
