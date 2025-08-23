@@ -84,16 +84,6 @@ const AVIYONIK_FIELDS = [
 ];
 const AVIYONIK_PAKET_SIZE = 4 * 12 + 1 + 1 + 2; // 12 float + 1 int32 + 1 checksum  = 52 byte
 
-// Ana sayfa - Login sayfasına yönlendir
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
-
-// Dashboard sayfası
-app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
 // Static dosyaları servis e (route'lardan sonra)
 app.use(express.static(path.join(__dirname, 'public')));
 
