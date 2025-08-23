@@ -6,7 +6,11 @@
   "author": {
     "name": "Akif9748"
   },
-  "contributors": ["VAkkas"],
+  "contributors": [
+    {
+      "name": "Vakkas1234"
+    }
+  ],
   "scripts": {
     "start": "node index.js"
   },

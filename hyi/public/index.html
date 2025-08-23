@@ -835,15 +835,20 @@ function updateRocketVisualization(data) {
     rocketAngle = data.aci;
     aci = rocketAngle;
     
+    //float yAngle = atan2(YIvme_Kalman.X, -ZIvme_Kalman.X) * 180 / PI;                                                           // roll
+   // float xAngle = atan2(-XIvme_Kalman.X, sqrt(YIvme_Kalman.X * YIvme_Kalman.X + ZIvme_Kalman.X * ZIvme_Kalman.X)) * 180 / PI;  // pitch
+    //float zAngle = 0;                                                                                                           // yaw degistirme dusuncem yok teknofest
+    //////////////////////////////////////////////////////////////////////////////// SIT'e Özel Veriler
+
     // İvme verilerinden açıları hesapla - aviyonik sistem dik durduğu için
     // Pitch (X ekseni) - yukarı-aşağı açı (dik pozisyondan)
     const pitch = Math.atan2(-data.ivme_x, Math.sqrt(data.ivme_y * data.ivme_y + data.ivme_z * data.ivme_z)) * 180 / Math.PI;
     
     // Yaw (Y ekseni) - sağa-sola açı (dik pozisyondan)
-    const yaw = Math.atan2(data.ivme_y, data.ivme_z) * 180 / Math.PI;
+    const yaw = 0;
     
     // Roll (Z ekseni) - dönme açısı (dik pozisyondan)
-    const roll = 0; // Şimdilik 0, gerekirse hesaplanabilir
+    const roll = Math.atan2(data.ivme_y,-data.ivme_z) * 180 / Math.PI;
     
     rocketAngleSpan.textContent = `${rocketAngle.toFixed(1)}°`;
     

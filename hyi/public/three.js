@@ -22,7 +22,7 @@ function main() {
     }
     
     const camera = new THREE.PerspectiveCamera(60, 2, 0.1, 1000); // FOV'u artır
-    camera.position.set(600, 1500, 600); // Daha yukarıdan ve açılı görüş
+    camera.position.set(600, 600, 600); // Daha yukarıdan ve açılı görüş
     const controls = new THREE.OrbitControls(camera, canvas);
     controls.target.set(0, 200, 0); // Roketin daha yukarısına odaklan
     controls.enableDamping = true; // Yumuşak hareket
@@ -33,7 +33,7 @@ function main() {
     controls.minPolarAngle = Math.PI * 0.05; // Minimum açı sınırı (aşağıdan bakış için)
     
     // Kameranın başlangıç rotasyonunu ayarla
-    camera.lookAt(0, 200, 0);
+    camera.lookAt(0,200, 0);
     controls.update();
     const scene = new THREE.Scene();
     // Işıklar - Daha yumuşak ve doğal
