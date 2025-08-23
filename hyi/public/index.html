@@ -186,8 +186,6 @@
   </div>
   <div class="map-container">
     <div class="info-panel">
-      <div>Enlem: <span id="rocketLat">0°</span></div>
-      <div>Boylam: <span id="rocketLng">0°</span></div>
       <div style="margin-top: 10px; border-top: 1px solid #555; padding-top: 10px;">
         <div style="color: #ff6b6b; font-weight: bold;">Aviyonik Mesafe: <span id="distanceToRocket">0 m</span></div>
         <div style="font-size: 12px; color: #aaa;">Aviyonik ↔ Yer İstasyonu</div>
@@ -346,8 +344,6 @@ const gorevErrorCountSpan = document.getElementById('gorevErrorCount');
 // 3D ve Harita elementleri
 const rocketAngleSpan = document.getElementById('rocketAngle');
 const rocketAltitudeSpan = document.getElementById('rocketAltitude');
-const rocketLatSpan = document.getElementById('rocketLat');
-const rocketLngSpan = document.getElementById('rocketLng');
 const distanceToRocketSpan = document.getElementById('distanceToRocket');
 const distanceToGorevSpan = document.getElementById('distanceToGorev');
 
@@ -871,9 +867,7 @@ function updateRocketVisualization(data) {
     rocketLat = data.roket_enlem;
     rocketLng = data.roket_boylam;
     
-    rocketLatSpan.textContent = `${rocketLat.toFixed(6)}°`;
-    rocketLngSpan.textContent = `${rocketLng.toFixed(6)}°`;
-    
+
     // Mesafe hesapla ve güncelle
     if (browserLat && browserLng) {
       const distance = calculateDistance(rocketLat, rocketLng, browserLat, browserLng);
