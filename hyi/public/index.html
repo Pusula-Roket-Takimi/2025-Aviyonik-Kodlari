@@ -848,7 +848,7 @@ function updateRocketVisualization(data) {
     const yaw = 0;
     
     // Roll (Z ekseni) - dönme açısı (dik pozisyondan)
-    const roll =Math.atan2(data.ivme_y,-data.ivme_z) * 180 / Math.PI;
+    const roll = Math.atan2(data.ivme_y,-data.ivme_z) * 180 / Math.PI;
     
     rocketAngleSpan.textContent = `${rocketAngle.toFixed(1)}°`;
     
