@@ -233,83 +233,117 @@ async function updateAvailablePorts() {
       serialNumber: port.serialNumber || 'Yok'
     }));
     broadcast('ports-updated', availablePorts);
+    console.log(`Port listesi güncellendi: ${availablePorts.length} port bulundu`);
   } catch (error) {
     console.error('Port listeleme hatası:', error);
   }
 }
 
+// Port bağlantı durumlarını kontrol et ve güncelle
+function checkPortStatus() {
+  const status = {
+    aviyonik: aviyonikPort && aviyonikPort.isOpen,
+    gorev: gorevPort && gorevPort.isOpen,
+    hyi: hyiPort && hyiPort.isOpen
+  };
+  
+  broadcast('port-status-updated', status);
+  return status;
+}
+
 
 
 function sendAviyonikData(ws, msg) {
-  if (aviyonikPort?.isOpen)
-    aviyonikPort.close();
+  try {
+    // Eğer port zaten açıksa önce kapat
+    if (aviyonikPort && aviyonikPort.isOpen) {
+      aviyonikPort.close();
+      aviyonikPort = null;
+    }
 
-  aviyonikPort = new SerialPort({
-    path: msg.data,
-    baudRate: 9600
-  });
+    // Yeni port bağlantısı oluştur
+    aviyonikPort = new SerialPort({
+      path: msg.data,
+      baudRate: 9600,
+      autoOpen: false
+    });
 
-  let buffer = Buffer.alloc(0);
-  aviyonikPort.on('open', () => {
-    console.log('Aviyonik port açıldı:', msg.data);
-    ws.send(JSON.stringify({ type: 'aviyonik-connected', data: msg.data }));
-  });
+    // Port açıldığında
+    aviyonikPort.on('open', () => {
+      console.log('Aviyonik port açıldı:', msg.data);
+      ws.send(JSON.stringify({ type: 'aviyonik-connected', data: msg.data }));
+      checkPortStatus(); // Port durumunu güncelle
+    });
 
-  aviyonikPort.on('error', (err) => {
-    console.error('Aviyonik port hatası:', err);
-    ws.send(JSON.stringify({ type: 'aviyonik-error', data: err.message }));
-  });
+    // Port hatası
+    aviyonikPort.on('error', (err) => {
+      console.error('Aviyonik port hatası:', err);
+      ws.send(JSON.stringify({ type: 'aviyonik-error', data: err.message }));
+      checkPortStatus(); // Port durumunu güncelle
+    });
 
-  aviyonikPort.on('data', (data) => {
-    buffer = Buffer.concat([buffer, data]);
-    while (buffer.length > 0) {
+    // Port kapandığında
+    aviyonikPort.on('close', () => {
+      console.log('Aviyonik port kapandı');
+      checkPortStatus(); // Port durumunu güncelle
+    });
 
-      const headerIndex = buffer.indexOf(AVIYONIK_HEADER);
-      if (headerIndex === -1) {
-        buffer = Buffer.alloc(0);
-        break;
-      }
-      if (buffer.length < headerIndex + AVIYONIK_PAKET_SIZE)
-        break;
+    let buffer = Buffer.alloc(0);
+    
+    aviyonikPort.on('data', (data) => {
+      buffer = Buffer.concat([buffer, data]);
+      while (buffer.length > 0) {
 
+        const headerIndex = buffer.indexOf(AVIYONIK_HEADER);
+        if (headerIndex === -1) {
+          buffer = Buffer.alloc(0);
+          break;
+        }
+        if (buffer.length < headerIndex + AVIYONIK_PAKET_SIZE)
+          break;
 
-      const footerIndex = headerIndex + AVIYONIK_PAKET_SIZE - 1;
-      if (buffer[footerIndex] !== AVIYONIK_FOOTER) {
-        buffer = buffer.slice(headerIndex + 1);
-        continue;
-      }
+        const footerIndex = headerIndex + AVIYONIK_PAKET_SIZE - 1;
+        if (buffer[footerIndex] !== AVIYONIK_FOOTER) {
+          buffer = buffer.slice(headerIndex + 1);
+          continue;
+        }
 
-      const payload = buffer.slice(headerIndex, headerIndex + AVIYONIK_PAKET_SIZE); // Tüm paket
-      const data = payload.slice(1, AVIYONIK_PAKET_SIZE - 2); // VERILER: header sonrası checksum'a (dahil degil) kadar
+        const payload = buffer.slice(headerIndex, headerIndex + AVIYONIK_PAKET_SIZE); // Tüm paket
+        const data = payload.slice(1, AVIYONIK_PAKET_SIZE - 2); // VERILER: header sonrası checksum'a (dahil degil) kadar
 
-      const veri = {};
+        const veri = {};
 
-      for (const field of AVIYONIK_FIELDS)
-        veri[field.key] = (field.type === 'int') ? data.readUInt8(field.offset) : data.readFloatLE(field.offset);
+        for (const field of AVIYONIK_FIELDS)
+          veri[field.key] = (field.type === 'int') ? data.readUInt8(field.offset) : data.readFloatLE(field.offset);
 
+        const checksum = payload.readUInt8(AVIYONIK_PAKET_SIZE - 2); // checksum byte !??!?
+        const calculated = payload.slice(0, AVIYONIK_PAKET_SIZE - 2).reduce((sum, byte) => sum + byte, 0) % 256;
 
-      const checksum = payload.readUInt8(AVIYONIK_PAKET_SIZE - 2); // checksum byte !??!?
-      const calculated = payload.slice(0, AVIYONIK_PAKET_SIZE - 2).reduce((sum, byte) => sum + byte, 0) % 256;
+        buffer = buffer.slice(headerIndex + AVIYONIK_PAKET_SIZE);
 
-      buffer = buffer.slice(headerIndex + AVIYONIK_PAKET_SIZE);
-
-      if (checksum !== calculated) {
-        console.warn(`⚠️ Checksum hatası: beklenen ${checksum}, hesaplanan ${calculated}`);
-        aviyonikErrorCount++;
-        ws.send(JSON.stringify({ type: 'aviyonik-error-count-updated', data: aviyonikErrorCount }));
-        break;// istemciye gönder bunu
-      }
-      for (const key in veri)
-        HYI_SAF_VERILER[key] = veri[key];
+        if (checksum !== calculated) {
+          console.warn(`⚠️ Checksum hatası: beklenen ${checksum}, hesaplanan ${calculated}`);
+          aviyonikErrorCount++;
+          ws.send(JSON.stringify({ type: 'aviyonik-error-count-updated', data: aviyonikErrorCount }));
+          break;// istemciye gönder bunu
+        }
+        for (const key in veri)
+          HYI_SAF_VERILER[key] = veri[key];
 
       // Saf veri log'una yaz
       writeSafVeriLog();
 
       ws.send(JSON.stringify({ type: 'aviyonik-data', data: veri }));
     }
-
-
   });
+  
+  // Port'u aç
+  aviyonikPort.open();
+  
+} catch (error) {
+  console.error('Aviyonik port bağlantı hatası:', error);
+  ws.send(JSON.stringify({ type: 'aviyonik-error', data: error.message }));
+}
 }
 
 
@@ -590,6 +624,8 @@ function sendHyiData(ws, msg) {
 wss.on('connection', (ws) => {
   console.log('Client bağlandı');
   ws.send(JSON.stringify({ type: 'ports-updated', data: availablePorts }));
+  // Mevcut port durumlarını da gönder
+  checkPortStatus();
 
   ws.on('message', async (message) => {
     let msg;
@@ -607,6 +643,8 @@ wss.on('connection', (ws) => {
         case 'refresh-ports':
           await updateAvailablePorts();
           ws.send(JSON.stringify({ type: 'ports-updated', data: availablePorts }));
+          // Port durumunu da güncelle
+          checkPortStatus();
           break;
         case 'connect-aviyonik':
           try {
@@ -638,11 +676,20 @@ wss.on('connection', (ws) => {
             if (aviyonikPort && aviyonikPort.isOpen) {
               aviyonikPort.close(() => {
                 console.log('Aviyonik port kapatıldı');
+                aviyonikPort = null;
                 ws.send(JSON.stringify({ type: 'aviyonik-disconnected' }));
+                checkPortStatus(); // Port durumunu güncelle
               });
+            } else {
+              aviyonikPort = null;
+              ws.send(JSON.stringify({ type: 'aviyonik-disconnected' }));
+              checkPortStatus(); // Port durumunu güncelle
             }
           } catch (error) {
             console.error('Aviyonik port kapatma hatası:', error);
+            aviyonikPort = null;
+            ws.send(JSON.stringify({ type: 'aviyonik-disconnected' }));
+            checkPortStatus(); // Port durumunu güncelle
           }
           break;
         case 'disconnect-gorev':
@@ -650,11 +697,20 @@ wss.on('connection', (ws) => {
             if (gorevPort && gorevPort.isOpen) {
               gorevPort.close(() => {
                 console.log('Görev Yükü port kapatıldı');
+                gorevPort = null;
                 ws.send(JSON.stringify({ type: 'gorev-disconnected' }));
+                checkPortStatus(); // Port durumunu güncelle
               });
+            } else {
+              gorevPort = null;
+              ws.send(JSON.stringify({ type: 'gorev-disconnected' }));
+              checkPortStatus(); // Port durumunu güncelle
             }
           } catch (error) {
             console.error('Görev port kapatma hatası:', error);
+            gorevPort = null;
+            ws.send(JSON.stringify({ type: 'gorev-disconnected' }));
+            checkPortStatus(); // Port durumunu güncelle
           }
           break;
         case 'disconnect-hyi':
@@ -662,8 +718,14 @@ wss.on('connection', (ws) => {
             if (hyiPort && hyiPort.isOpen) {
               hyiPort.close(() => {
                 console.log('HYİ port kapatıldı');
+                hyiPort = null;
                 ws.send(JSON.stringify({ type: 'hyi-disconnected' }));
+                checkPortStatus(); // Port durumunu güncelle
               });
+            } else {
+              hyiPort = null;
+              ws.send(JSON.stringify({ type: 'hyi-disconnected' }));
+              checkPortStatus(); // Port durumunu güncelle
             }
             // Interval'ı da temizle
             if (hyiInterval) {
@@ -673,6 +735,9 @@ wss.on('connection', (ws) => {
             hyiConnected = false;
           } catch (error) {
             console.error('HYİ port kapatma hatası:', error);
+            hyiPort = null;
+            ws.send(JSON.stringify({ type: 'hyi-disconnected' }));
+            checkPortStatus(); // Port durumunu güncelle
           }
           break;
         default:
@@ -709,6 +774,6 @@ server.listen(PORT, async () => {
   // İlk port listesini güncelle
   await updateAvailablePorts();
 
-  // Port listesini periyodik olarak güncelle
-  setInterval(updateAvailablePorts, 5000);
+  // Port listesini periyodik olarak güncelle (sadece bağlantı açıldığında)
+  // setInterval(updateAvailablePorts, 5000); // Kaldırıldı - sadece manuel yenileme
 });
