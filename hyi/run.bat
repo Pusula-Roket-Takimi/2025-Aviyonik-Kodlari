@@ -1,10 +1,10 @@
 
 cd /D "%~dp0"
 
-git fetch
-
+git pull
+start chrome http://localhost:3000
 node .
 
-start chrome http://localhost:3000
+
 
 
