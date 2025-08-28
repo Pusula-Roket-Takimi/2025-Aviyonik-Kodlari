@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<title>2025 Pusula Roket Takımı Yer İstasyonu</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/MTLLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="./three.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; background: #121212; color: #eee; margin: 0; padding: 20px; }
+  h2 { border-bottom: 2px solid #555; padding-bottom: 4px; }
+  select, button { font-size: 1rem; margin: 5px; padding: 5px 10px; }
+  select { min-width: 200px; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 30px; background: #222; }
+  th, td { border: 1px solid #444; padding: 6px 10px; text-align: left; }
+  th { background: #333; }
+  .table-container { 
+    max-height: 300px; 
+    overflow-y: auto; 
+    border: 1px solid #444; 
+    border-radius: 5px;
+    margin-bottom: 20px;
+  }
+  .table-container table { 
+    margin-bottom: 0; 
+    background: #222;
+  }
+  .table-container th { 
+    position: sticky; 
+    top: 0; 
+    background: #333; 
+    z-index: 10;
+  }
+  #log { background: #222; padding: 10px; height: 150px; overflow-y: scroll; font-family: monospace; margin-top: 20px; border: 1px solid #444; }
+  .connection-group { margin-bottom: 20px; padding: 15px; background: #1a1a1a; border-radius: 5px; }
+  .connection-status { display: inline-block; margin-left: 10px; padding: 3px 8px; border-radius: 3px; font-size: 0.9em; }
+  .connected { background: #28a745; color: white; }
+  .disconnected { background: #dc3545; color: white; }
+  .connecting { background: #ffc107; color: black; }
+  .refresh-btn { background: #17a2b8; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+  .refresh-btn:hover { background: #138496; }
+  
+  /* 3D ve Harita için yeni stiller */
+  .visualization-container { 
+    display: flex; 
+    gap: 20px; 
+    margin: 20px 0; 
+    height: 400px; 
+  }
+  .rocket-3d { 
+    flex: 1; 
+    background: #1a1a1a; 
+    border: 1px solid #444; 
+    border-radius: 5px; 
+    position: relative; 
+    min-width: 350px;
+    min-height: 400px;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    overflow: hidden;
+  }
+  #3dModelCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    background: #000;
+  }
+  .map-container { 
+    flex: 1; 
+    background: #1a1a1a; 
+    border: 1px solid #444; 
+    border-radius: 5px; 
+    position: relative; 
+  }
+  #map { 
+    width: 100%; 
+    height: 100%; 
+  }
+  .info-panel {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.8);
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 22px;
+    z-index: 1000;
+    color: #fff;
+    pointer-events: none;
+  }
+  
+  /* Grafik stilleri */
+  .charts-container {
+    display: flex;
+    gap: 20px;
+    margin: 20px 0;
+  }
+  .chart-wrapper {
+    flex: 1;
+    background: #1a1a1a;
+    border: 1px solid #444;
+    border-radius: 5px;
+    padding: 15px;
+    height: 300px;
+  }
+  .chart-wrapper canvas {
+    max-height: 250px;
+  }
+  .chart-title {
+    text-align: center;
+    margin-bottom: 10px;
+    font-size: 16px;
+    color: #fff;
+  }
+</style>
+</head>
+<body>
+
+<h1 style="text-align: center;">Pusula Roket Takımı Yer İstasyonu</h1>
+<div class="connection-group">
+  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+    <h3>Bağlantılar</h3>
+    <button class="refresh-btn" id="refreshPortsBtn">Portları Yenile</button>
+  </div>
+  <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 5px;">
+      <label>Aviyonik:</label>
+      <select id="aviyonikPortSelect">
+        <option value="">Port seçin...</option>
+      </select>
+      <button id="connectAviyonikBtn">Bağlan</button>
+      <button id="disconnectAviyonikBtn" disabled>Kes</button>
+      <span id="aviyonikStatus" class="connection-status disconnected">Bağlı Değil</span>
+    </div>
+    
+    <div style="display: flex; align-items: center; gap: 5px;">
+      <label>Görev Yükü:</label>
+      <select id="gorevPortSelect">
+        <option value="">Port seçin...</option>
+      </select>
+      <button id="connectGorevBtn">Bağlan</button>
+      <button id="disconnectGorevBtn" disabled>Kes</button>
+      <span id="gorevStatus" class="connection-status disconnected">Bağlı Değil</span>
+    </div>
+    
+    <div style="display: flex; align-items: center; gap: 5px;">
+      <label>HYİ:</label>
+      <select id="hyiPortSelect">
+        <option value="">Port seçin...</option>
+      </select>
+      <button id="connectHYIBtn">Bağlan</button>
+      <button id="disconnectHYIBtn" disabled>Kes</button>
+      <span id="hyiStatus" class="connection-status disconnected">Bağlı Değil</span>
+    </div>
+  </div>
+</div>
+
+
+
+<h2>Aviyonik Verisi</h2>
+<div class="table-container" id="aviyonikTableContainer">
+  <table id="aviyonikTable"><thead><tr><th>Parametre</th><th>Değer</th></tr></thead><tbody></tbody></table>
+</div>
+
+<h2>Görev Yükü Verisi</h2>
+<div class="table-container" id="gorevTableContainer">
+  <table id="gorevTable"><thead><tr><th>Parametre</th><th>Değer</th></tr></thead><tbody></tbody></table>
+</div>
+
+<!-- 3D Roket ve Harita Görünümü -->
+<div class="visualization-container">
+  <div class="rocket-3d">
+    <div class="info-panel">
+      <div>Roket Açısı: <span id="rocketAngle">0°</span></div>
+      <div>İrtifa: <span id="rocketAltitude">0 m</span></div>
+
+    </div>
+    <canvas id="3dModelCanvas"></canvas>
+  </div>
+  <div class="map-container">
+    <div class="info-panel">
+      <div style="margin-top: 10px; border-top: 1px solid #555; padding-top: 10px;">
+        <div style="color: #ff6b6b; font-weight: bold;">Aviyonik Mesafe: <span id="distanceToRocket">0 m</span></div>
+        <div style="font-size: 12px; color: #aaa;">Aviyonik ↔ Yer İstasyonu</div>
+      </div>
+      <div style="margin-top: 10px; border-top: 1px solid #555; padding-top: 10px;">
+        <div style="color: #4ecdc4; font-weight: bold;">Görev Mesafesi: <span id="distanceToGorev">0 m</span></div>
+        <div style="font-size: 12px; color: #aaa;">Görev Yükü ↔ Yer İstasyonu</div>
+      </div>
+    </div>
+    <div id="map"></div>
+  </div>
+</div>
+
+<!-- Grafikler -->
+<div class="charts-container">
+  <div class="chart-wrapper">
+    <div class="chart-title">İrtifa Grafiği</div>
+    <canvas id="irtifaGrafik"></canvas>
+  </div>
+  <div class="chart-wrapper">
+    <div class="chart-title">Açı Grafiği</div>
+    <canvas id="aciGrafik"></canvas>
+  </div>
+  <div class="chart-wrapper">
+    <div class="chart-title">Basınç Grafiği</div>
+    <canvas id="basincGrafik"></canvas>
+  </div>
+</div>
+
+<h2>Kaydedilen Veriler</h2>
+<div class="connection-group">
+  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+    <h3>Saf Veri Logu</h3>
+    <button class="refresh-btn" id="loadSafVeriLogBtn">Verileri Yükle</button>
+    <button class="refresh-btn" id="clearSafVeriLogBtn" style="background: #dc3545;">Dosyayı Temizle</button>
+    <span id="safVeriLogFileInfo" style="margin-left: 10px; color: #aaa;"></span>
+  </div>
+  <div class="table-container" id="safVeriLogTableContainer">
+    <table id="safVeriLogTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Roket Enlem</th>
+          <th>Roket Boylam</th>
+          <th>Roket İrtifa</th>
+          <th>Basınç</th>
+          <th>Basınç İrtifa</th>
+          <th>İvme X</th>
+          <th>İvme Y</th>
+          <th>İvme Z</th>
+          <th>Jiroskop X</th>
+          <th>Jiroskop Y</th>
+          <th>Jiroskop Z</th>
+          <th>Açı</th>
+          <th>Paraşüt</th>
+          <th>Görev Enlem</th>
+          <th>Görev Boylam</th>
+          <th>Görev İrtifa</th>
+          <th>Yoğunluk</th>
+          <th>Sıcaklık</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="connection-group">
+  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+    <h3> Bilimsel Görev Yükü Veri Logu</h3>
+    <button class="refresh-btn" id="loadGorevDataBtn">Verileri Yükle</button>
+    <button class="refresh-btn" id="clearGorevDataBtn" style="background: #dc3545;">Dosyayı Temizle</button>
+    <span id="fileInfo" style="margin-left: 10px; color: #aaa;"></span>
+  </div>
+  <div class="table-container" id="savedDataTableContainer">
+    <table id="savedDataTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Enlem</th>
+          <th>Boylam</th>
+          <th>İrtifa</th>
+          <th>Basınç</th>
+          <th>Yoğunluk</th>
+          <th>Sıcaklık</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+<h2>İstatistikler</h2>
+<div style="display: flex; gap: 20px; margin-bottom: 20px;">
+  <div>Aviyonik Paketi: <span id="aviyonikCount">0</span></div>
+  <div>Görev Yükü Paketi: <span id="gorevCount">0</span></div>
+  <div>HYİ Gönderildi: <span id="hyiCount">0</span></div>
+  <div>Aviyonik Hatalı Veri: <span id="aviyonikErrorCount">0</span></div>
+  <div>Görev Yükü Hatalı Veri: <span id="gorevErrorCount">0</span></div>
+</div>
+
+<h2>Log</h2>
+<div id="log"></div>
+
+<script>
+const socket = new WebSocket(`ws://${location.host}`);
+// Roket açıları için değişkenler
+let rocketAngle = 0;
+
+// Veri saklama
+let lastAviyonikData = {};
+let lastGorevData = {};
+
+// Sayaçlar
+let aviyonikPacketCount = 0;
+let gorevPacketCount = 0;
+let hyiSentCount = 0;
+let aviyonikErrorCount = 0;
+let gorevErrorCount = 0;
+
+// 3D Roket için değişkenler
+// rocketAngle değişkeni yukarıda tanımlandı
+
+// Harita için değişkenler
+let map, rocketMarker, aviyonikLabel, gorevLabel;
+let rocketLat = 37.583791232901596, rocketLng = 36.86079511351165; // Maraş koordinatları (varsayılan)
+let browserLat = null, browserLng = null; // Tarayıcı konumu
+let gorevLat = 37.58404828980637, gorevLng = 36.860294950190365; // Maraş  konumu
+
+// Grafikler için değişkenler
+let irtifaChart, aciChart, basincChart;
+let dataPoints = 0;
+
+// DOM elementleri
+const logDiv = document.getElementById('log');
+const aviyonikTableBody = document.querySelector('#aviyonikTable tbody');
+const gorevTableBody = document.querySelector('#gorevTable tbody');
+const aviyonikStatus = document.getElementById('aviyonikStatus');
+const gorevStatus = document.getElementById('gorevStatus');
+const hyiStatus = document.getElementById('hyiStatus');
+const savedDataTableBody = document.querySelector('#savedDataTable tbody');
+const fileInfoSpan = document.getElementById('fileInfo');
+const safVeriLogTableBody = document.querySelector('#safVeriLogTable tbody');
+const safVeriLogFileInfoSpan = document.getElementById('safVeriLogFileInfo');
+
+const aviyonikPortSelect = document.getElementById('aviyonikPortSelect');
+const gorevPortSelect = document.getElementById('gorevPortSelect');
+const hyiPortSelect = document.getElementById('hyiPortSelect');
+
+const aviyonikCountSpan = document.getElementById('aviyonikCount');
+const gorevCountSpan = document.getElementById('gorevCount');
+const hyiCountSpan = document.getElementById('hyiCount');
+const aviyonikErrorCountSpan = document.getElementById('aviyonikErrorCount');
+const gorevErrorCountSpan = document.getElementById('gorevErrorCount');
+
+// 3D ve Harita elementleri
+const rocketAngleSpan = document.getElementById('rocketAngle');
+const rocketAltitudeSpan = document.getElementById('rocketAltitude');
+const distanceToRocketSpan = document.getElementById('distanceToRocket');
+const distanceToGorevSpan = document.getElementById('distanceToGorev');
+
+function log(msg) {
+  const timestamp = new Date().toLocaleTimeString();
+  logDiv.innerHTML += `[${timestamp}] ${msg}<br>`;
+  logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+function updateStatus(element, status) {
+  element.className = `connection-status ${status}`;
+  switch(status) {
+    case 'connected':
+      element.textContent = 'Bağlı';
+      break;
+    case 'connecting':
+      element.textContent = 'Bağlanıyor...';
+      break;
+    case 'disconnected':
+    default:
+      element.textContent = 'Bağlı Değil';
+      break;
+  }
+}
+
+function updateCounts() {
+  aviyonikCountSpan.textContent = aviyonikPacketCount;
+  gorevCountSpan.textContent = gorevPacketCount;
+  hyiCountSpan.textContent = hyiSentCount;
+  aviyonikErrorCountSpan.textContent = aviyonikErrorCount;
+  gorevErrorCountSpan.textContent = gorevErrorCount;
+}
+
+// Kaydedilen verileri yükle
+async function loadGorevData() {
+  try {
+    const response = await fetch('/api/gorev-verileri');
+    const result = await response.json();
+    
+    if (result.success) {
+      savedDataTableBody.innerHTML = '';
+      
+      if (result.data.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="8" style="text-align: center; color: #aaa;">Henüz veri kaydedilmemiş</td>';
+        savedDataTableBody.appendChild(tr);
+      } else {
+        result.data.forEach((veri, index) => {
+          const tr = document.createElement('tr');
+          // Zaman formatını düzelt - eğer timestamp varsa onu kullan, yoksa şu anki zamanı kullan
+          tr.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${veri.gorev_enlem.toFixed(6)}</td>
+            <td>${veri.gorev_boylam.toFixed(6)}</td>
+            <td>${veri.gorev_irtifa.toFixed(2)} m</td>
+            <td>${veri.basinc.toFixed(2)} hPa</td>
+            <td>${veri.yogunluk.toFixed(2)} kg/m³</td>
+            <td>${veri.sicaklik.toFixed(2)} °C</td>
+          `;
+          savedDataTableBody.appendChild(tr);
+        });
+      }
+      
+      log(`Kaydedilen veriler yüklendi: ${result.data.length} kayıt`);
+    } else {
+      log('Veri yükleme hatası: ' + result.error);
+    }
+  } catch (error) {
+    log('Veri yükleme hatası: ' + error.message);
+  }
+}
+
+// Dosya bilgilerini güncelle
+async function updateFileInfo() {
+  try {
+    const response = await fetch('/api/gorev-verileri/size');
+    const result = await response.json();
+    
+    if (result.success) {
+      const sizeKB = (result.size / 1024).toFixed(2);
+      fileInfoSpan.textContent = `Dosya: ${result.lines} kayıt, ${sizeKB} KB`;
+    } else {
+      fileInfoSpan.textContent = 'Dosya bilgisi alınamadı';
+    }
+  } catch (error) {
+    fileInfoSpan.textContent = 'Dosya bilgisi alınamadı';
+  }
+}
+
+// Dosyayı temizle
+async function clearGorevData() {
+  if (!confirm('Kaydedilen tüm veriler silinecek. Emin misiniz?')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/gorev-verileri', { method: 'DELETE' });
+    const result = await response.json();
+    
+    if (result.success) {
+      log('Dosya temizlendi: ' + result.message);
+      savedDataTableBody.innerHTML = '';
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="8" style="text-align: center; color: #aaa;">Henüz veri kaydedilmemiş</td>';
+      savedDataTableBody.appendChild(tr);
+      updateFileInfo();
+    } else {
+      log('Dosya temizleme hatası: ' + result.error);
+    }
+  } catch (error) {
+    log('Dosya temizleme hatası: ' + error.message);
+  }
+}
+
+// Saf veri log yükleme fonksiyonu
+async function loadSafVeriLog() {
+  try {
+    const response = await fetch('/api/saf-veri-log');
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        safVeriLogTableBody.innerHTML = '';
+        if (result.data.length > 0) {
+          result.data.forEach((veri, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>${index + 1}</td>
+              <td>${veri.roket_enlem.toFixed(6)}</td>
+              <td>${veri.roket_boylam.toFixed(6)}</td>
+              <td>${veri.roket_irtifa.toFixed(2)} m</td>
+              <td>${veri.basinc.toFixed(2)} hPa</td>
+              <td>${veri.basinc_irtifa.toFixed(2)} m</td>
+              <td>${veri.ivme_x.toFixed(3)} m/s²</td>
+              <td>${veri.ivme_y.toFixed(3)} m/s²</td>
+              <td>${veri.ivme_z.toFixed(3)} m/s²</td>
+              <td>${veri.jiroskop_x.toFixed(3)} °/s</td>
+              <td>${veri.jiroskop_y.toFixed(3)} °/s</td>
+              <td>${veri.jiroskop_z.toFixed(3)} °/s</td>
+              <td>${veri.aci.toFixed(2)}°</td>
+              <td>${veri.parasut_durum}</td>
+              <td>${veri.gorev_enlem.toFixed(6)}</td>
+              <td>${veri.gorev_boylam.toFixed(6)}</td>
+              <td>${veri.gorev_irtifa.toFixed(2)} m</td>
+              <td>${veri.yogunluk.toFixed(3)} kg/m³</td>
+              <td>${veri.sicaklik.toFixed(2)}°C</td>
+            `;
+            safVeriLogTableBody.appendChild(row);
+          });
+          log(`Saf veri log yüklendi: ${result.data.length} kayıt`);
+        } else {
+          log('Saf veri log dosyası boş');
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Saf veri log yükleme hatası:', error);
+    log('Saf veri log yükleme hatası: ' + error.message);
+  }
+}
+
+// Saf veri log dosya boyutu kontrolü
+async function checkSafVeriLogFileSize() {
+  try {
+    const response = await fetch('/api/saf-veri-log/size');
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        const sizeKB = (result.size / 1024).toFixed(2);
+        safVeriLogFileInfoSpan.textContent = `${result.lines} kayıt, ${sizeKB} KB`;
+      }
+    }
+  } catch (error) {
+    console.error('Saf veri log dosya boyutu kontrol hatası:', error);
+  }
+}
+
+// Saf veri log temizleme fonksiyonu
+async function clearSafVeriLog() {
+  if (!confirm('Saf veri log dosyasındaki tüm veriler silinecek. Emin misiniz?')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/saf-veri-log', { method: 'DELETE' });
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        log('Saf veri log dosyası temizlendi');
+        safVeriLogTableBody.innerHTML = '';
+        safVeriLogFileInfoSpan.textContent = '';
+      }
+    }
+  } catch (error) {
+    console.error('Saf veri log temizleme hatası:', error);
+    log('Saf veri log temizleme hatası: ' + error.message);
+  }
+}
+
+// Grafikleri başlat
+function initCharts() {
+  // İrtifa grafiği
+  const irtifaCtx = document.getElementById('irtifaGrafik').getContext('2d');
+  irtifaChart = new Chart(irtifaCtx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'İrtifa (m)',
+        data: [],
+        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+        borderColor: 'rgba(54, 162, 235, 1)',
+        borderWidth: 2,
+        tension: 0.4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: 'rgba(255, 255, 255, 0.1)'
+          },
+          ticks: {
+            color: '#fff'
+          }
+        },
+        x: {
+          grid: {
+            color: 'rgba(255, 255, 255, 0.1)'
+          },
+          ticks: {
+            color: '#fff'
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: '#fff'
+          }
+        }
+      }
+    }
+  });
+
+  // Açı grafiği
+  const aciCtx = document.getElementById('aciGrafik').getContext('2d');
+  aciChart = new Chart(aciCtx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Açı (°)',
+        data: [],
+        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+        borderColor: 'rgba(255, 99, 132, 1)',
+        borderWidth: 2,
+        tension: 0.4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          grid: {
+            color: 'rgba(255, 255, 255, 0.1)'
+          },
+          ticks: {
+            color: '#fff'
+          }
+        },
+        x: {
+          grid: {
+            color: 'rgba(255, 255, 255, 0.1)'
+          },
+          ticks: {
+            color: '#fff'
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: '#fff'
+          }
+        }
+      }
+    }
+  });
+
+  // Basınç grafiği
+  const basincCtx = document.getElementById('basincGrafik').getContext('2d');
+  basincChart = new Chart(basincCtx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Basınç (hPa)',
+        data: [],
+        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        borderColor: 'rgba(75, 192, 192, 1)',
+        borderWidth: 2,
+        tension: 0.4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          grid: {
+            color: 'rgba(255, 255, 255, 0.1)'
+          },
+          ticks: {
+            color: '#fff'
+          }
+        },
+        x: {
+          grid: {
+            color: 'rgba(255, 255, 255, 0.1)'
+          },
+          ticks: {
+            color: '#fff'
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: '#fff'
+          }
+        }
+      }
+    }
+  });
+}
+
+// Grafiklere veri ekle
+function addChartData(irtifa, aci, basinc) {
+  const timestamp = new Date().toLocaleTimeString();
+  dataPoints++;
+  
+  // İrtifa grafiği
+  irtifaChart.data.labels.push(timestamp);
+  irtifaChart.data.datasets[0].data.push(irtifa);
+  
+  // Açı grafiği
+  aciChart.data.labels.push(timestamp);
+  aciChart.data.datasets[0].data.push(aci);
+  
+  // Basınç grafiği
+  basincChart.data.labels.push(timestamp);
+  basincChart.data.datasets[0].data.push(basinc);
+  
+  // Son 50 veri noktasını tut
+  if (irtifaChart.data.labels.length > 50) {
+    irtifaChart.data.labels.shift();
+    irtifaChart.data.datasets[0].data.shift();
+    aciChart.data.labels.shift();
+    aciChart.data.datasets[0].data.shift();
+    basincChart.data.labels.shift();
+    basincChart.data.datasets[0].data.shift();
+  }
+  
+  irtifaChart.update('none');
+  aciChart.update('none');
+  basincChart.update('none');
+}
+
+// Harita Başlatma
+function initMap() {
+  map = L.map('map').setView([rocketLat, rocketLng], 13);
+  
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+  
+  // Roket marker'ı
+  rocketMarker = L.marker([rocketLat, rocketLng], {
+    icon: L.divIcon({
+      className: 'rocket-marker',
+      html: '🚀',
+      iconSize: [30, 30],
+      iconAnchor: [15, 15]
+    })
+  }).addTo(map);
+  
+  // Aviyonik konum etiketi
+  aviyonikLabel = L.marker([rocketLat, rocketLng], {
+    icon: L.divIcon({
+      className: 'aviyonik-label',
+      html: '<div style="background: rgba(255, 0, 0, 0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; white-space: nowrap; cursor: pointer;">AVİYONİK</div>',
+      iconSize: [60, 20],
+      iconAnchor: [30, 10]
+    })
+  }).addTo(map);
+  
+  // Aviyonik etiketine tıklama olayı
+  aviyonikLabel.on('click', function() {
+    map.setView([rocketLat, rocketLng], 18);
+    console.log('Aviyonik konumuna gidildi');
+  });
+  
+  // Görev yükü konum etiketi - başlangıçta görünür ama farklı konumda
+  gorevLabel = L.marker([rocketLat + 0.001, rocketLng + 0.001], {
+    icon: L.divIcon({
+      className: 'gorev-label',
+      html: '<div style="background: rgba(0, 255, 0, 0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; white-space: nowrap; cursor: pointer;">GÖREV YÜKÜ</div>',
+      iconSize: [80, 20],
+      iconAnchor: [40, 10]
+    })
+  }).addTo(map);
+  
+  // Başlangıçta görev yükü label'ını görünür yap ama farklı konumda
+  
+  // Görev yükü etiketine tıklama olayı
+  gorevLabel.on('click', function() {
+    // Görev yükü konumunu al (eğer varsa)
+    if (lastGorevData.gorev_enlem && lastGorevData.gorev_boylam) {
+      map.setView([lastGorevData.gorev_enlem, lastGorevData.gorev_boylam], 18);
+      console.log('Görev yükü konumuna gidildi');
+    } else {
+      map.setView([rocketLat, rocketLng], 18);
+      console.log('Roket konumuna gidildi (görev yükü konumu yok)');
+    }
+  });
+  
+  // Tarayıcı konumunu al ve haritada göster
+  navigator.geolocation.getCurrentPosition(
+    function (position) {
+      browserLat = position.coords.latitude;
+      browserLng = position.coords.longitude;
+      
+      console.log("Tarayıcı Enlem:", browserLat);
+      console.log("Tarayıcı Boylam:", browserLng);
+      
+      // Mesafe hesapla ve göster
+      if (rocketLat && rocketLng) {
+        const distance = calculateDistance(rocketLat, rocketLng, browserLat, browserLng);
+        distanceToRocketSpan.textContent = `${distance.toFixed(0)} m`;
+      }
+      
+      // Görev yükü mesafesini de hesapla
+      updateGorevDistance();
+      
+      // Aviyonik bağlı değilse haritayı tarayıcı konumuna ayarla
+      if (aviyonikStatus.textContent === 'Bağlı Değil') {
+        map.setView([browserLat, browserLng], 13);
+        console.log("Harita tarayıcı konumuna ayarlandı");
+      }
+      
+      // Tarayıcı konumunu haritada göster
+      const browserMarker = L.marker([browserLat, browserLng], {
+        icon: L.divIcon({
+          className: 'browser-location',
+          html: '<div style="background: rgba(0, 0, 255, 0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; white-space: nowrap; cursor: pointer;">Yer İstasyonu </div>',
+          iconSize: [70, 20],
+          iconAnchor: [35, 10]
+        })
+      }).addTo(map);
+      
+      // Tarayıcı etiketine tıklama olayı
+      browserMarker.on('click', function() {
+        map.setView([browserLat, browserLng], 18);
+        console.log('Tarayıcı konumuna gidildi');
+      });
+    },
+    function (error) {
+      console.error("Konum alınamadı:", error);
+    }
+  );
+}
+
+// Roket verilerini güncelle
+function updateRocketVisualization(data) {
+  let irtifa = 0;
+  let aci = 0;
+  let basinc = 0;
+  
+  // Sadece aviyonik verilerinden al
+  if (data.aci !== undefined && data.ivme_x !== undefined && data.ivme_y !== undefined && data.ivme_z !== undefined) {
+    rocketAngle = data.aci;
+    aci = rocketAngle;
+    
+    //float yAngle = atan2(YIvme_Kalman.X, -ZIvme_Kalman.X) * 180 / PI;                                                           // roll
+   // float xAngle = atan2(-XIvme_Kalman.X, sqrt(YIvme_Kalman.X * YIvme_Kalman.X + ZIvme_Kalman.X * ZIvme_Kalman.X)) * 180 / PI;  // pitch
+    //float zAngle = 0;                                                                                                           // yaw degistirme dusuncem yok teknofest
+    //////////////////////////////////////////////////////////////////////////////// SIT'e Özel Veriler
+
+    // İvme verilerinden açıları hesapla - aviyonik sistem dik durduğu için
+    // Pitch (X ekseni) - yukarı-aşağı açı (dik pozisyondan)
+    const pitch = Math.atan2(-data.ivme_x, Math.sqrt(data.ivme_y * data.ivme_y + data.ivme_z * data.ivme_z)) * 180 / Math.PI;
+    
+    // Yaw (Y ekseni) - sağa-sola açı (dik pozisyondan)
+    const yaw = 0;
+    
+    // Roll (Z ekseni) - dönme açısı (dik pozisyondan)
+    const roll = Math.atan2(data.ivme_y,-data.ivme_z) * 180 / Math.PI;
+    
+    rocketAngleSpan.textContent = `${rocketAngle.toFixed(1)}°`;
+    
+    // three.js modelini döndür - aviyonik sistem dik durduğu için
+    if (window.setRocketAngle) {
+      window.setRocketAngle(pitch, yaw, roll);
+    }
+  }
+  
+  if (data.basinc_irtifa !== undefined) {
+    irtifa = data.basinc_irtifa;
+    rocketAltitudeSpan.textContent = `${irtifa.toFixed(1)} m`;
+  }
+  
+  if (data.basinc !== undefined) {
+    basinc = data.basinc;
+  }
+  
+  if (data.roket_enlem !== undefined && data.roket_boylam !== undefined) {
+    rocketLat = data.roket_enlem;
+    rocketLng = data.roket_boylam;
+    
+
+    // Mesafe hesapla ve güncelle
+    if (browserLat && browserLng) {
+      const distance = calculateDistance(rocketLat, rocketLng, browserLat, browserLng);
+      distanceToRocketSpan.textContent = `${distance.toFixed(0)} m`;
+    }
+    
+    // Görev yükü mesafesini de güncelle
+    updateGorevDistance();
+    
+    if (rocketMarker) {
+      rocketMarker.setLatLng([rocketLat, rocketLng]);
+      // Sadece aviyonik etiketini roket konumuna yerleştir
+      aviyonikLabel.setLatLng([rocketLat, rocketLng]);
+      // Görev yükü etiketi kendi konumunda kalacak (updateRocketVisualization'da değiştirme)
+      map.setView([rocketLat, rocketLng]);
+    }
+  }
+  
+  // Mesafe hesaplama zaten yukarıda browserLat/browserLng ile yapılıyor
+  
+  // Grafiklere veri ekle (sadece aviyonik verilerinden)
+  if (irtifa > 0 || aci !== 0 || basinc > 0) {
+    addChartData(irtifa, aci, basinc);
+  }
+}
+
+// Mesafe hesaplama (Haversine formülü)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // km cinsinden Dünya'nın yarıçapı
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c; // km
+  return distance * 1000; // metre cinsine çevir
+}
+
+// Görev yükü mesafesini hesapla ve güncelle
+function updateGorevDistance() {
+  if (browserLat && browserLng) {
+    if (gorevLat && gorevLng) {
+      // Görev yükü konumu varsa onu kullan
+      const distance = calculateDistance(gorevLat, gorevLng, browserLat, browserLng);
+      distanceToGorevSpan.textContent = `${distance.toFixed(0)} m`;
+    } else if (rocketLat && rocketLng) {
+      // Görev yükü konumu yoksa roket konumunu kullan
+      const distance = calculateDistance(rocketLat, rocketLng, browserLat, browserLng);
+      distanceToGorevSpan.textContent = `${distance.toFixed(0)} m`;
+    } else {
+      distanceToGorevSpan.textContent = `0 m`;
+    }
+  } else {
+    distanceToGorevSpan.textContent = `0 m`;
+  }
+}
+
+// WebSocket event listeners
+document.addEventListener('DOMContentLoaded', () => {
+  // Grafikleri ve haritayı başlat
+  initCharts();
+  initMap();
+  
+  // Dosya bilgilerini güncelle
+  updateFileInfo();
+  checkSafVeriLogFileSize();
+  
+  socket.addEventListener('open', () => {
+    log('Sunucuya bağlanıldı');
+  });
+
+  socket.addEventListener('close', () => {
+    log('Sunucu bağlantısı koptu');
+    updateStatus(aviyonikStatus, 'disconnected');
+    updateStatus(gorevStatus, 'disconnected');
+    updateStatus(hyiStatus, 'disconnected');
+  });
+
+  socket.addEventListener('message', (event) => {
+    let msg;
+    try {
+      msg = JSON.parse(event.data);
+    } catch (e) {
+      log('Geçersiz mesaj: ' + event.data);
+      aviyonikErrorCount++; // JSON parse hatası olduğunda hatalı veri sayacını artır
+      updateCounts();
+      return;
+    }
+    switch (msg.type) {
+      case 'ports-updated':
+        updatePortSelects(msg.data);
+        break;
+      case 'aviyonik-connected':
+        log(`Aviyonik bağlandı: ${msg.data}`);
+        updateStatus(aviyonikStatus, 'connected');
+        document.getElementById('connectAviyonikBtn').disabled = true;
+        document.getElementById('disconnectAviyonikBtn').disabled = false;
+        
+        // Aviyonik bağlandığında haritayı roket konumuna ayarla
+        if (rocketLat && rocketLng) {
+          map.setView([rocketLat, rocketLng], 13);
+          console.log("Aviyonik bağlandı, harita roket konumuna ayarlandı");
+        }
+        break;
+      case 'aviyonik-disconnected':
+        log('Aviyonik bağlantısı kesildi');
+        updateStatus(aviyonikStatus, 'disconnected');
+        document.getElementById('connectAviyonikBtn').disabled = false;
+        document.getElementById('disconnectAviyonikBtn').disabled = true;
+        
+        // Aviyonik bağlantısı kesildiğinde haritayı tarayıcı konumuna ayarla
+        navigator.geolocation.getCurrentPosition(
+          function (position) {
+            browserLat = position.coords.latitude;
+            browserLng = position.coords.longitude;
+            
+            map.setView([browserLat, browserLng], 13);
+            console.log("Aviyonik bağlantısı kesildi, harita tarayıcı konumuna ayarlandı");
+            
+            // Mesafe hesapla ve güncelle
+            if (rocketLat && rocketLng) {
+              const distance = calculateDistance(rocketLat, rocketLng, browserLat, browserLng);
+              distanceToRocketSpan.textContent = `${distance.toFixed(0)} m`;
+            }
+            
+            // Görev yükü mesafesini de güncelle
+            updateGorevDistance();
+          },
+          function (error) {
+            console.error("Konum alınamadı:", error);
+          }
+        );
+        break;
+      case 'aviyonik-error':
+        log(`Aviyonik hatası: ${msg.data}`);
+        updateStatus(aviyonikStatus, 'disconnected');
+        document.getElementById('connectAviyonikBtn').disabled = false;
+        document.getElementById('disconnectAviyonikBtn').disabled = true;
+        break;
+      case 'aviyonik-data':
+        lastAviyonikData = msg.data;
+        updateTable(aviyonikTableBody, msg.data);
+        updateRocketVisualization(msg.data);
+        aviyonikPacketCount++;
+        updateCounts();
+        log(`Aviyonik: ${Object.keys(msg.data).length} parametre`);
+        break;
+      case 'gorev-connected':
+        log(`Görev Yükü bağlandı: ${msg.data}`);
+        updateStatus(gorevStatus, 'connected');
+        document.getElementById('connectGorevBtn').disabled = true;
+        document.getElementById('disconnectGorevBtn').disabled = false;
+        break;
+      case 'gorev-disconnected':
+        log('Görev Yükü bağlantısı kesildi');
+        updateStatus(gorevStatus, 'disconnected');
+        document.getElementById('connectGorevBtn').disabled = false;
+        document.getElementById('disconnectGorevBtn').disabled = true;
+        break;
+      case 'gorev-error':
+        log(`Görev Yükü hatası: ${msg.data}`);
+        updateStatus(gorevStatus, 'disconnected');
+        document.getElementById('connectGorevBtn').disabled = false;
+        document.getElementById('disconnectGorevBtn').disabled = true;
+        break;
+      case 'gorev-data':
+        lastGorevData = msg.data;
+        updateTable(gorevTableBody, msg.data);
+        
+        // Görev yükü konumunu güncelle
+        if (msg.data.gorev_enlem !== undefined && msg.data.gorev_boylam !== undefined) {
+          gorevLat = msg.data.gorev_enlem;
+          gorevLng = msg.data.gorev_boylam;
+          if (gorevLabel) {
+            gorevLabel.setLatLng([gorevLat, gorevLng]);
+          }
+          
+          // Görev yükü mesafesini güncelle
+          updateGorevDistance();
+        }
+        
+        gorevPacketCount++;
+        updateCounts();
+        log(`Görev Yükü: ${Object.keys(msg.data).length} parametre`);
+        break;
+      case 'hyi-connected':
+        log(`HYİ bağlandı: ${msg.data}`);
+        updateStatus(hyiStatus, 'connected');
+        document.getElementById('connectHYIBtn').disabled = true;
+        document.getElementById('disconnectHYIBtn').disabled = false;
+        break;
+      case 'hyi-disconnected':
+        log('HYİ bağlantısı kesildi');
+        updateStatus(hyiStatus, 'disconnected');
+        document.getElementById('connectHYIBtn').disabled = false;
+        document.getElementById('disconnectHYIBtn').disabled = true;
+        break;
+      case 'hyi-error':
+        log(`HYİ hatası: ${msg.data}`);
+        updateStatus(hyiStatus, 'disconnected');
+        document.getElementById('connectHYIBtn').disabled = false;
+        document.getElementById('disconnectHYIBtn').disabled = true;
+        break;
+      case 'hyi-sent':
+        hyiSentCount++;
+        updateCounts();
+        log(`HYİ paketi gönderildi! Sayaç: ${msg.data}`);
+        break;
+      case 'hyi-send-error':
+        log(`HYİ gönderim hatası: ${msg.data}`);
+        break;
+      case 'aviyonik-error-count-updated':
+        aviyonikErrorCount = msg.data;
+        updateCounts();
+        log(`Aviyonik hatalı veri sayısı güncellendi: ${aviyonikErrorCount}`);
+        break;
+      case 'gorev-error-count-updated':
+        gorevErrorCount = msg.data;
+        updateCounts();
+        log(`Görev Yükü hatalı veri sayısı güncellendi: ${gorevErrorCount}`);
+        break;
+      default:
+        break;
+    }
+  });
+});
+
+// Port seçim listelerini güncelle
+function updatePortSelects(ports) {
+  const selects = [aviyonikPortSelect, gorevPortSelect, hyiPortSelect];
+  selects.forEach(select => {
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">Port seçin...</option>';
+    ports.forEach(port => {
+      const option = document.createElement('option');
+      option.value = port.path;
+      option.textContent = `${port.path} (${port.manufacturer})`;
+      select.appendChild(option);
+    });
+    if (currentValue) {
+      select.value = currentValue;
+    }
+  });
+  log(`${ports.length} port bulundu`);
+}
+
+// Button event listeners
+document.getElementById('refreshPortsBtn').addEventListener('click', () => {
+  socket.send(JSON.stringify({ type: 'refresh-ports' }));
+  log('Port listesi yenileniyor...');
+});
+
+document.getElementById('connectAviyonikBtn').addEventListener('click', () => {
+  const portPath = aviyonikPortSelect.value;
+  if (portPath) {
+    updateStatus(aviyonikStatus, 'connecting');
+    socket.send(JSON.stringify({ type: 'connect-aviyonik', data: portPath }));
+  } else {
+    alert('Lütfen bir port seçin');
+  }
+});
+
+document.getElementById('disconnectAviyonikBtn').addEventListener('click', () => {
+  socket.send(JSON.stringify({ type: 'disconnect-aviyonik' }));
+});
+
+document.getElementById('connectGorevBtn').addEventListener('click', () => {
+  const portPath = gorevPortSelect.value;
+  if (portPath) {
+    updateStatus(gorevStatus, 'connecting');
+    socket.send(JSON.stringify({ type: 'connect-gorev', data: portPath }));
+  } else {
+    alert('Lütfen bir port seçin');
+  }
+});
+
+document.getElementById('disconnectGorevBtn').addEventListener('click', () => {
+  socket.send(JSON.stringify({ type: 'disconnect-gorev' }));
+});
+
+document.getElementById('connectHYIBtn').addEventListener('click', () => {
+  const portPath = hyiPortSelect.value;
+  if (portPath) {
+    updateStatus(hyiStatus, 'connecting');
+    socket.send(JSON.stringify({ type: 'connect-hyi', data: portPath }));
+  } else {
+    alert('Lütfen bir port seçin');
+  }
+});
+
+document.getElementById('disconnectHYIBtn').addEventListener('click', () => {
+  socket.send(JSON.stringify({ type: 'disconnect-hyi' }));
+});
+
+// Kaydedilen veriler için event listener'lar
+document.getElementById('loadGorevDataBtn').addEventListener('click', () => {
+  loadGorevData();
+  updateFileInfo();
+});
+
+document.getElementById('clearGorevDataBtn').addEventListener('click', () => {
+  clearGorevData();
+});
+
+// Saf veri log için event listener'lar
+document.getElementById('loadSafVeriLogBtn').addEventListener('click', () => {
+  loadSafVeriLog();
+  checkSafVeriLogFileSize();
+});
+
+document.getElementById('clearSafVeriLogBtn').addEventListener('click', () => {
+  clearSafVeriLog();
+});
+
+// Parsing fonksiyonları
+function updateTable(tbody, data) {
+  tbody.innerHTML = '';
+  for (let key in data) {
+    const tr = document.createElement('tr');
+    const tdKey = document.createElement('td');
+    tdKey.textContent = key;
+    const tdVal = document.createElement('td');
+    tdVal.textContent = data[key];
+    tr.appendChild(tdKey);
+    tr.appendChild(tdVal);
+    tbody.appendChild(tr);
+  }
+}
+
+</script>
+<footer style="text-align: center;">&copy Designed and Coded By Vakkas Emre Yildiz And Akif9748</footer>
+</body>
+</html>
