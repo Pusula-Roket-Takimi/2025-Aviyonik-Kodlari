@@ -19,7 +19,7 @@ void setup() {
   while(file.available()){
     Serial.write(file.read());
   }
-  file.close();
+  
 }
  
 void loop() {
