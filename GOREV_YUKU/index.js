@@ -3,8 +3,8 @@ const os = require("os");
 const { SerialPort } = require("serialport");
 
 // ---- CONFIG AYARLARI ----
-const portName ="/dev/tty.usbserial-10"; //Port Adını yazın
-const baudRate = 115200;
+const portName ="COM5"; //Port Adını yazın
+const baudRate = 921600;
 const filePath = `${os.homedir()}/Desktop/veri.csv`;
 // -----------------
 
@@ -13,6 +13,7 @@ const port = new SerialPort({ path: portName, baudRate: baudRate });
 const fileStream = fs.createWriteStream(filePath);
 
 port.on("data", (data) => {
+  console.log(data.toString())
   fileStream.write(data);
 });
 

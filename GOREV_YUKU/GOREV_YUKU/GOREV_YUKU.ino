@@ -26,7 +26,6 @@ void setup() {
 
   // SPIFFS başlat
   if (!SPIFFS.begin(true)) {
-    Serial.println("SPIFFS err");
     while (1)
       ;
   }
@@ -34,7 +33,6 @@ void setup() {
   // Dosyayı sürekli açık bırak
   LOG = SPIFFS.open("/veri.csv", FILE_APPEND);
   if (!LOG) {
-    Serial.println("veri.csv err");
     while (1)
       ;
   }
